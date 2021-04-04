@@ -16,38 +16,70 @@
 (require 'consult)
 (require 'lsp)
 
-(defun +consult--lsp-flatten-diagnostics (transformer &optional current-workspace?)
+(defun consult-lsp--flatten-diagnostics (transformer &optional current-workspace?)
   "Flatten the list of LSP-mode diagnostics to consult candidates.
 
 TRANSFORMER takes (file diag) and returns a suitable element for
 `completing-read'.
 CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
   (append
+   ;; TODO: sort diagnostics to put errors first
    (ht-map
     (lambda (file diags)
       (mapcar (lambda (diag) (funcall transformer file diag))
               diags))
     (lsp-diagnostics current-workspace?))))
 
-(defun severity-to-level (sev)
-  "Convert diagnostic severity SEV to a string."
-  (cond ((= sev 3) "error")
-        ((= sev 2) "warning")
-        ((= sev 1) "info")
-        (t "unknown")))
+(defun consult-lsp--severity-to-level (diag)
+  "Convert diagnostic severity of DIAG to a string."
+  (let ((sev (lsp-get diag :severity)))
+    (cond ((= sev 1) (propertize "error" 'face 'error))
+          ((= sev 2) (propertize "warn" 'face 'warning))
+          ((= sev 3) (propertize "info" 'face 'info-xref))
+          ((= sev 4) (propertize "hint" 'face 'italic))
+          (t "unknown"))))
+
+(defun consult-lsp--severity-to-type (diag)
+  "Convert diagnostic severity of DIAG to a type for consult--type."
+  (let ((sev (lsp-get diag :severity)))
+    (cond ((= sev 1) ?e)
+          ((= sev 2) ?w)
+          ((= sev 3) ?i)
+          ((= sev 4) ?h)
+          (t ?u))))
+
+(defconst consult-lsp--narrow
+  '((?e . "Errors")
+    (?w . "Warnings")
+    (?i . "Infos")
+    (?h . "Hints")
+    (?u . "Unknown"))
+  "Set the narrow keys for consult-lsp")
+
+(defun consult-lsp--source (diag)
+  "Convert source of DIAG to a propertized string."
+  (let ((source (lsp-get diag :source)))
+    (propertize source 'face 'info-xref)))
+
+(defun consult-lsp--diagnostic-marker (diag)
+  "Return a marker at DIAG beginning."
+  (consult--position-marker
+   (lsp-get diag :file)
+   (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line)))
+   (lsp-translate-column (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :character)))))
 
 (defun test-transformer (file diag)
   "Transform LSP-mode diagnostics from a pair FILE DIAG to a candidate."
   (propertize
-   (format "%-7s %-80.80s %-4d %-10.10s %.30S"
-           (severity-to-level (ht-get diag "severity" 0))
-           file
-           (ht-get (ht-get (ht-get diag "range") "start") "line" 0)
-           (ht-get diag "source" "unknown")
-           (ht-get diag "message"))
+   (format "%-7s %-30.60s %.15s %s"
+           (consult-lsp--severity-to-level diag)
+           (consult--format-location
+            file
+            (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line))))
+           (consult-lsp--source diag)
+           (string-replace "\n" " " (lsp-get diag :message)))
    ;; TODO: 'consult--candidate -> marker at the beginning of diag
-   ;; It should use (ht-get (ht-get diag "range") "start") ?
-   'consult--type (ht-get diag "severity" "unknown")))
+   'consult--type (consult-lsp--severity-to-type diag)))
 ;; message
 ;; source
 ;; code
@@ -57,17 +89,18 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 ;; relatedInformation
 
 ;;;###autoload
-(defun +consult/lsp-diagnostics ()
+(defun consult-lsp-diagnostics ()
   "Query LSP-mode diagnostics."
   (interactive)
-  (consult--read (+consult--lsp-flatten-diagnostics 'test-transformer)
+  (consult--read (consult-lsp--flatten-diagnostics 'test-transformer)
                  :prompt "LSP Diagnostics "
                  :require-match t
                  :history t
                  :category 'consult-lsp-diagnostics
                  :sort nil
+                 :title (consult--type-title consult-lsp--narrow)
+                 :narrow (consult--type-narrow consult-lsp--narrow)
                  :lookup #'consult--lookup-candidate))
 
 (provide 'consult-lsp)
-
 ;;; consult-lsp.el ends here
