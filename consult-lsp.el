@@ -31,8 +31,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      (lsp-diagnostics current-workspace?)))
    ;; Sort by ascending severity
    (lambda (cand-left cand-right)
-     (let* ((diag-left (get-text-property 0 'consult--candidate cand-left))
-            (diag-right (get-text-property 0 'consult--candidate cand-right))
+     (let* ((diag-left (get-text-property 0 'consult--candidate (car cand-left)))
+            (diag-right (get-text-property 0 'consult--candidate (car cand-right)))
             (sev-left (or (lsp:diagnostic-severity? diag-left) 12))
             (sev-right (or (lsp:diagnostic-severity? diag-right) 12)))
        (< sev-left sev-right)))))
@@ -42,7 +42,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
   (let ((sev (lsp:diagnostic-severity? diag)))
     (cond ((= sev 1) (propertize "error" 'face 'error))
           ((= sev 2) (propertize "warn" 'face 'warning))
-          ((= sev 3) (propertize "info" 'face 'info-xref))
+          ((= sev 3) (propertize "info" 'face 'success))
           ((= sev 4) (propertize "hint" 'face 'italic))
           (t "unknown"))))
 
@@ -65,26 +65,28 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 (defun consult-lsp--source (diag)
   "Convert source of DIAG to a propertized string."
-  (propertize (lsp:diagnostic-source? diag) 'face 'info-xref))
+  (propertize (lsp:diagnostic-source? diag) 'face 'success))
 
-(defun consult-lsp--diagnostic-marker (diag)
+(defun consult-lsp--diagnostic-marker (file diag)
   "Return a marker at DIAG beginning."
   (consult--position-marker
-   (lsp-get diag :file)
-   (lsp-translate-line (1+ (lsp-get (lsp-get (lsp:diagnostic-range diag) :start) :line)))
-   (lsp-translate-column (1+ (lsp-get (lsp-get (lsp:diagnostic-range diag) :start) :character)))))
+   file
+   (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range diag)))))
+   (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range diag)))))))
 
 (defun test-transformer (file diag)
   "Transform LSP-mode diagnostics from a pair FILE DIAG to a candidate."
   (propertize
-   (format "%-7s %-30.60s %.15s %s"
+   (format "%-4s %-60.60s %.15s %s"
            (consult-lsp--severity-to-level diag)
            (consult--format-location
             file
             (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line))))
            (consult-lsp--source diag)
            (string-replace "\n" " " (lsp:diagnostic-message diag)))
-   ;; TODO: 'consult-location -> marker at the beginning of diag
+   ;; TODO: Will that consult-lsp--diagnostic-marker eagerly open all files ?
+   'consult-location (consult-lsp--diagnostic-marker file diag)
+   'consult-location-list (list file diag)
    'consult--candidate diag
    'consult--type (consult-lsp--severity-to-type diag)))
 ;; message
@@ -94,6 +96,26 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 ;; range
 ;; tags
 ;; relatedInformation
+
+(defun consult-lsp-diagnostics--preview (display)
+  "Xref preview with DISPLAY function."
+  (let ((open (consult--temporary-files))
+        (preview (consult--jump-preview)))
+    (lambda (cand restore)
+      (cond
+       (restore
+        (funcall preview nil t)
+        (funcall open nil))
+       (cand
+        (let ((loc-list (get-text-property 0 'consult-location-list (car cand)))
+              (consult--buffer-display display))
+          (message "Calling preview on %S" loc-list)
+          (funcall preview
+                   (consult--position-marker
+                    (funcall open (car loc-list))
+                    (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr loc-list))))))
+                    (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr loc-list)))))))
+                   nil)))))))
 
 ;;;###autoload
 (defun consult-lsp-diagnostics ()
@@ -107,7 +129,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
                  :sort nil
                  :title (consult--type-title consult-lsp--narrow)
                  :narrow (consult--type-narrow consult-lsp--narrow)
-                 :lookup #'consult--lookup-candidate))
+                 :state (consult-lsp-diagnostics--preview #'switch-to-buffer-other-window)
+                 :lookup #'consult--lookup-location))
 
 (provide 'consult-lsp)
 ;;; consult-lsp.el ends here
