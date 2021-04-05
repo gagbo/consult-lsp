@@ -23,7 +23,7 @@ TRANSFORMER takes (file diag) and returns a suitable element for
 `completing-read'.
 CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
   (sort
-   (append
+   (flatten-list
     (ht-map
      (lambda (file diags)
        (mapcar (lambda (diag) (funcall transformer file diag))
@@ -31,8 +31,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      (lsp-diagnostics current-workspace?)))
    ;; Sort by ascending severity
    (lambda (cand-left cand-right)
-     (let* ((diag-left (get-text-property 0 'consult--candidate (car cand-left)))
-            (diag-right (get-text-property 0 'consult--candidate (car cand-right)))
+     (let* ((diag-left (get-text-property 0 'consult--candidate cand-left))
+            (diag-right (get-text-property 0 'consult--candidate cand-right))
             (sev-left (or (lsp:diagnostic-severity? diag-left) 12))
             (sev-right (or (lsp:diagnostic-severity? diag-right) 12)))
        (< sev-left sev-right)))))
@@ -85,37 +85,23 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
            (consult-lsp--source diag)
            (string-replace "\n" " " (lsp:diagnostic-message diag)))
    ;; TODO: Will that consult-lsp--diagnostic-marker eagerly open all files ?
-   'consult-location (consult-lsp--diagnostic-marker file diag)
-   'consult-location-list (list file diag)
-   'consult--candidate diag
+   'consult--candidate (cons file diag)
    'consult--type (consult-lsp--severity-to-type diag)))
-;; message
-;; source
-;; code
-;; severity
-;; range
-;; tags
-;; relatedInformation
 
-(defun consult-lsp-diagnostics--preview (display)
-  "Xref preview with DISPLAY function."
+(defun consult-lsp-diagnostics--state ()
+  "LSP diagnostic preview."
   (let ((open (consult--temporary-files))
-        (preview (consult--jump-preview)))
+        (jump (consult--jump-state)))
     (lambda (cand restore)
-      (cond
-       (restore
-        (funcall preview nil t)
+      (when restore
         (funcall open nil))
-       (cand
-        (let ((loc-list (get-text-property 0 'consult-location-list (car cand)))
-              (consult--buffer-display display))
-          (message "Calling preview on %S" loc-list)
-          (funcall preview
-                   (consult--position-marker
-                    (funcall open (car loc-list))
-                    (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr loc-list))))))
-                    (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr loc-list)))))))
-                   nil)))))))
+      (message "Calling preview on %S" cand)
+      (funcall jump
+               (consult--position-marker
+                (and (car cand) (funcall (if restore #'find-file open) (car cand)))
+                (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr cand))))))
+                (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr cand)))))))
+               restore))))
 
 ;;;###autoload
 (defun consult-lsp-diagnostics ()
@@ -127,10 +113,16 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
                  :history t
                  :category 'consult-lsp-diagnostics
                  :sort nil
+                 :predicate
+                 (lambda (cand)
+                   (let ((key (get-text-property 0 'consult--type cand)))
+                     (if consult--narrow
+                         (= key consult--narrow)
+                       t)))
                  :title (consult--type-title consult-lsp--narrow)
                  :narrow (consult--type-narrow consult-lsp--narrow)
-                 :state (consult-lsp-diagnostics--preview #'switch-to-buffer-other-window)
-                 :lookup #'consult--lookup-location))
+                 :state (consult-lsp-diagnostics--state)
+                 :lookup #'consult--lookup-candidate))
 
 (provide 'consult-lsp)
 ;;; consult-lsp.el ends here
