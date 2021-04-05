@@ -130,23 +130,30 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 ;;;; Symbols
 
-(setq consult-lsp-symbols--result nil)
+;; TODO: write the consult-lsp-symbols--narrow boilerplate
+;;      (the 26 symbol-kinds)
+;; TODO: extract the title function in a lambda
+;; TODO: use the narrow boilerplate in the title function
+;; TODO: extract the candidate building lambda in a "transformer"
+;; TODO: Make the function not try to jump if the user exits with ESC
+;; TODO: Make the command properly use only the current workspace without prefix arg
 
-(defun consult-lsp-symbols--candidates (workspaces input)
-  "Query workspace/symbol with INPUT in WORKSPACES asynchronously."
-  (with-lsp-workspaces workspaces
-    (-let (((request &as &plist :id request-id) ))
-      (setq consult-lsp-symbols--request-id request-id)
-      (lsp-request-async
-       "workspace/symbol"
-       (list :query input)
-       (lambda (candidates)
-         (setq consult-lsp-symbols--request-id nil)
-         (setq consult-lsp-symbols--result candidates)
-         (funcall async 'refresh))
-       :mode 'detached
-       :cancel-token :workspace-symbols)
-      consult-lsp-symbols--result)))
+
+(defun consult-lsp-symbols--state ()
+  "LSP diagnostic preview."
+  (let ((open (consult--temporary-files))
+        (jump (consult--jump-state)))
+    (lambda (cand restore)
+      (when restore
+        (funcall open nil))
+      (funcall jump
+               (let* ((location (lsp:symbol-information-location cand))
+                      (uri (lsp:location-uri location)))
+                 (consult--position-marker
+                  (and uri (funcall (if restore #'find-file open) (lsp--uri-to-path uri)))
+                  (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:location-range location)))))
+                  (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:location-range location)))))))
+               restore))))
 
 ;; "Create ASYNC sink function.
 ;; The async function should accept a single action argument.
@@ -162,14 +169,16 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 ;; List     Append the list to the list of candidates.
 ;; String   The input string, called when the user enters something."
 
+;; It is an async source because some servers, like rust-analyzer, send a
+;; max count of results for queries (120 last time checked). Therefore, in
+;; big projects the first query might not have the target result to filter on.
+;; To avoid this issue, we use an async source that retriggers the request.
 (defun consult-lsp-symbols--make-async-source (async workspaces)
   "Make a consult--read compatible async-source for symbols in WORKSPACES."
   (let ((request-id)
         (cancel-token :consult-lsp-symbols))
     (lambda (action)
       (pcase-exhaustive action
-        (""
-         (funcall async action))
         ((pred stringp)
          (lsp-cancel-request-by-token cancel-token)
          (with-lsp-workspaces workspaces
@@ -180,27 +189,37 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
               "workspace/symbol"
               (list :query action)
               (lambda (res)
+                ;; Flush old candidates list
+                (funcall async 'flush)
                 (funcall async
                          (mapcar
                           ;; TODO: extract this transformer and
                           ;; use consult--async-map instead
-                          (lambda (symbol-info) (lsp:symbol-information-name symbol-info))
+                          (lambda (symbol-info)
+                            (propertize
+                             (format "%-7s %-5s %s %s"
+                                     (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
+                                     (lsp:symbol-information-container-name? symbol-info)
+                                     (lsp:symbol-information-name symbol-info)
+                                     (rng-uri-file-name (lsp:location-uri (lsp:symbol-information-location symbol-info))))
+                             'consult--candidate symbol-info))
                           res)))
               :mode 'detached
               :no-merge nil
               :cancel-token cancel-token)))
          (funcall async action))
         ('destroy
+         (lsp-cancel-request-by-token cancel-token)
          (funcall async action))
         (_ (funcall async action))))))
 
 (defun consult-lsp-symbols ()
   "Query workspace symbols."
   (interactive)
-  (let ((ws (or (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session)))))
-                (lsp-workspaces)
+  (let ((ws (or (lsp-workspaces)
                 (gethash (lsp-workspace-root default-directory)
-                         (lsp-session-folder->servers (lsp-session))))))
+                         (lsp-session-folder->servers (lsp-session)))
+                (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session))))))))
     (consult--read
      (thread-first
          (consult--async-sink)
@@ -210,7 +229,14 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      :prompt "LSP Symbols "
      :require-match t
      :history t
-     :category 'consult-lsp-diagnostics)))
+     :category 'consult-lsp-diagnostics
+     :lookup #'consult--lookup-candidate
+     :title (lambda (cand)
+              (alist-get
+               (lsp:symbol-information-kind
+                (get-text-property 0 'consult--candidate cand))
+               lsp-symbol-kinds))
+     :state (consult-lsp-symbols--state))))
 
 
 (provide 'consult-lsp)
