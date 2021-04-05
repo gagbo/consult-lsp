@@ -128,6 +128,90 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
                    :lookup #'consult--lookup-candidate)))
 
 
+;;;; Symbols
+
+(setq consult-lsp-symbols--result nil)
+
+(defun consult-lsp-symbols--candidates (workspaces input)
+  "Query workspace/symbol with INPUT in WORKSPACES asynchronously."
+  (with-lsp-workspaces workspaces
+    (-let (((request &as &plist :id request-id) ))
+      (setq consult-lsp-symbols--request-id request-id)
+      (lsp-request-async
+       "workspace/symbol"
+       (list :query input)
+       (lambda (candidates)
+         (setq consult-lsp-symbols--request-id nil)
+         (setq consult-lsp-symbols--result candidates)
+         (funcall async 'refresh))
+       :mode 'detached
+       :cancel-token :workspace-symbols)
+      consult-lsp-symbols--result)))
+
+;; "Create ASYNC sink function.
+;; The async function should accept a single action argument.
+;; Only for the 'setup action, it is guaranteed that the call
+;; originates from the minibuffer. For the other actions no
+;; assumptions can be made.
+;; Depending on the argument, the caller context differ.
+;; 'setup   Setup the internal state.
+;; 'destroy Destroy the internal state.
+;; 'flush   Flush the list of candidates.
+;; 'refresh Request UI refresh.
+;; nil      Get the list of candidates.
+;; List     Append the list to the list of candidates.
+;; String   The input string, called when the user enters something."
+
+(defun consult-lsp-symbols--make-async-source (async workspaces)
+  "Make a consult--read compatible async-source for symbols in WORKSPACES."
+  (let ((candidates)
+        (request-id)
+        (cancel-token :consult-lsp-symbols))
+    (with-lsp-workspaces workspaces
+      (-let (((request &as &plist :id new-request-id)))
+        (lambda (action)
+          (pcase-exhaustive action
+            (""
+             (lsp-cancel-request-by-token cancel-token)
+             (funcall async action))
+            ((pred stringp)
+             (lsp-cancel-request-by-token cancel-token)
+             (setq request-id new-request-id)
+             (consult--async-log "consult-lsp-symbols request started for %S\n" action)
+             (lsp-request-async
+              "workspace/symbol"
+              (list :query action)
+              (lambda (res)
+                (setq consult-lsp-symbols--request-id nil)
+                (setq candidates res)
+                (funcall async candidates))
+              :mode 'detached
+              :no-merge nil
+              :cancel-token cancel-token)
+             (funcall async action))
+            ('destroy
+             (lsp-cancel-request-by-token cancel-token)
+             (setq candidates nil)
+             (funcall async action))
+            (_ (funcall async action))))))))
+
+(defun consult-lsp-symbols ()
+  "Query workspace symbols."
+  (interactive)
+  (let ((ws (or (lsp-workspaces)
+                (gethash (lsp-workspace-root default-directory)
+                         (lsp-session-folder->servers (lsp-session))))))
+    (consult--read
+     (thread-first
+         (consult--async-sink)
+       (consult--async-refresh-timer)
+       (consult-lsp-symbols--make-async-source ws)
+       (consult--async-throttle))
+     :prompt "LSP Symbols "
+     :require-match t
+     :history t
+     :category 'consult-lsp-diagnostics)))
+
 
 (provide 'consult-lsp)
 ;;; consult-lsp.el ends here
