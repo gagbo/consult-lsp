@@ -22,17 +22,24 @@
 TRANSFORMER takes (file diag) and returns a suitable element for
 `completing-read'.
 CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
-  (append
-   ;; TODO: sort diagnostics to put errors first
-   (ht-map
-    (lambda (file diags)
-      (mapcar (lambda (diag) (funcall transformer file diag))
-              diags))
-    (lsp-diagnostics current-workspace?))))
+  (sort
+   (append
+    (ht-map
+     (lambda (file diags)
+       (mapcar (lambda (diag) (funcall transformer file diag))
+               diags))
+     (lsp-diagnostics current-workspace?)))
+   ;; Sort by ascending severity
+   (lambda (cand-left cand-right)
+     (let* ((diag-left (get-text-property 0 'consult--candidate cand-left))
+            (diag-right (get-text-property 0 'consult--candidate cand-right))
+            (sev-left (or (lsp:diagnostic-severity? diag-left) 12))
+            (sev-right (or (lsp:diagnostic-severity? diag-right) 12)))
+       (< sev-left sev-right)))))
 
 (defun consult-lsp--severity-to-level (diag)
   "Convert diagnostic severity of DIAG to a string."
-  (let ((sev (lsp-get diag :severity)))
+  (let ((sev (lsp:diagnostic-severity? diag)))
     (cond ((= sev 1) (propertize "error" 'face 'error))
           ((= sev 2) (propertize "warn" 'face 'warning))
           ((= sev 3) (propertize "info" 'face 'info-xref))
@@ -41,7 +48,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 (defun consult-lsp--severity-to-type (diag)
   "Convert diagnostic severity of DIAG to a type for consult--type."
-  (let ((sev (lsp-get diag :severity)))
+  (let ((sev (lsp:diagnostic-severity? diag)))
     (cond ((= sev 1) ?e)
           ((= sev 2) ?w)
           ((= sev 3) ?i)
@@ -58,15 +65,14 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 (defun consult-lsp--source (diag)
   "Convert source of DIAG to a propertized string."
-  (let ((source (lsp-get diag :source)))
-    (propertize source 'face 'info-xref)))
+  (propertize (lsp:diagnostic-source? diag) 'face 'info-xref))
 
 (defun consult-lsp--diagnostic-marker (diag)
   "Return a marker at DIAG beginning."
   (consult--position-marker
    (lsp-get diag :file)
-   (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line)))
-   (lsp-translate-column (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :character)))))
+   (lsp-translate-line (1+ (lsp-get (lsp-get (lsp:diagnostic-range diag) :start) :line)))
+   (lsp-translate-column (1+ (lsp-get (lsp-get (lsp:diagnostic-range diag) :start) :character)))))
 
 (defun test-transformer (file diag)
   "Transform LSP-mode diagnostics from a pair FILE DIAG to a candidate."
@@ -77,8 +83,9 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
             file
             (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line))))
            (consult-lsp--source diag)
-           (string-replace "\n" " " (lsp-get diag :message)))
-   ;; TODO: 'consult--candidate -> marker at the beginning of diag
+           (string-replace "\n" " " (lsp:diagnostic-message diag)))
+   ;; TODO: 'consult-location -> marker at the beginning of diag
+   'consult--candidate diag
    'consult--type (consult-lsp--severity-to-type diag)))
 ;; message
 ;; source
