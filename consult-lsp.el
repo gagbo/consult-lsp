@@ -164,41 +164,41 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 (defun consult-lsp-symbols--make-async-source (async workspaces)
   "Make a consult--read compatible async-source for symbols in WORKSPACES."
-  (let ((candidates)
-        (request-id)
+  (let ((request-id)
         (cancel-token :consult-lsp-symbols))
-    (with-lsp-workspaces workspaces
-      (-let (((request &as &plist :id new-request-id)))
-        (lambda (action)
-          (pcase-exhaustive action
-            (""
-             (lsp-cancel-request-by-token cancel-token)
-             (funcall async action))
-            ((pred stringp)
-             (lsp-cancel-request-by-token cancel-token)
+    (lambda (action)
+      (pcase-exhaustive action
+        (""
+         (funcall async action))
+        ((pred stringp)
+         (lsp-cancel-request-by-token cancel-token)
+         (with-lsp-workspaces workspaces
+           (-let (((request &as &plist :id new-request-id)))
              (setq request-id new-request-id)
              (consult--async-log "consult-lsp-symbols request started for %S\n" action)
              (lsp-request-async
               "workspace/symbol"
               (list :query action)
               (lambda (res)
-                (setq consult-lsp-symbols--request-id nil)
-                (setq candidates res)
-                (funcall async candidates))
+                (funcall async
+                         (mapcar
+                          ;; TODO: extract this transformer and
+                          ;; use consult--async-map instead
+                          (lambda (symbol-info) (lsp:symbol-information-name symbol-info))
+                          res)))
               :mode 'detached
               :no-merge nil
-              :cancel-token cancel-token)
-             (funcall async action))
-            ('destroy
-             (lsp-cancel-request-by-token cancel-token)
-             (setq candidates nil)
-             (funcall async action))
-            (_ (funcall async action))))))))
+              :cancel-token cancel-token)))
+         (funcall async action))
+        ('destroy
+         (funcall async action))
+        (_ (funcall async action))))))
 
 (defun consult-lsp-symbols ()
   "Query workspace symbols."
   (interactive)
-  (let ((ws (or (lsp-workspaces)
+  (let ((ws (or (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session)))))
+                (lsp-workspaces)
                 (gethash (lsp-workspace-root default-directory)
                          (lsp-session-folder->servers (lsp-session))))))
     (consult--read
