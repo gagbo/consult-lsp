@@ -1,16 +1,20 @@
-;;; consult-lsp.el --- LSP Consult integration -*- lexical-binding: t; -*-
+;;; consult-lsp.el --- LSP-mode Consult integration -*- lexical-binding: t; -*-
 
 ;; Licence: MIT
-;; Keywords: completion, lsp
+;; Keywords: tools, completion, lsp
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
-;; Package-Requires: ((emacs "26.1") (lsp-mode "5.0") (consult "0.6"))
+;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.6"))
 ;; Version: 0.1
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;;; Commentary:
 ;; Provides LSP-mode related commands for consult
 
+;; TODO: Use a custom format for the propertized candidates
+;; TODO: Format the filenames better
+;; TODO: Check the properties in LSP to see how sources should be used
+;; TODO: Add a screenshot branch to host shots for README
 ;;; Code:
 
 (require 'consult)
@@ -205,8 +209,18 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
                         (uri (lsp:location-uri location)))
                    (consult--position-marker
                     (and uri (funcall (if restore #'find-file open) (lsp--uri-to-path uri)))
-                    (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:location-range location)))))
-                    (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:location-range location)))))))
+                    (thread-first location
+                      (lsp:location-range)
+                      (lsp:range-start)
+                      (lsp:position-line)
+                      (1+)
+                      (lsp-translate-line))
+                    (thread-first location
+                      (lsp:location-range)
+                      (lsp:range-start)
+                      (lsp:position-character)
+                      (1+)
+                      (lsp-translate-column))))
                  restore)))))
 
 ;; It is an async source because some servers, like rust-analyzer, send a
@@ -215,8 +229,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 ;; To avoid this issue, we use an async source that retriggers the request.
 (defun consult-lsp-symbols--make-async-source (async workspaces)
   "Pipe a consult--read compatible async-source ASYNC to search for symbols in WORKSPACES."
-  (let ((request-id)
-        (cancel-token :consult-lsp-symbols))
+  (let ((cancel-token :consult-lsp-symbols))
     (lambda (action)
       (pcase-exhaustive action
         ((or 'setup (pred stringp))

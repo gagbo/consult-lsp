@@ -1,10 +1,32 @@
 #+TITLE: Consult LSP-mode integration
+#+AUTHOR: Gerry Agbobada
+#+LANGUAGE: en
 
-*This is very much WIP*
+#+HTML: <a href="https://melpa.org/#/consult-lsp"><img alt="MELPA" src="https://melpa.org/packages/consult-lsp-badge.svg"/></a>
+#+HTML: <a href="https://stable.melpa.org/#/consult-lsp"><img alt="MELPA Stable" src="https://stable.melpa.org/packages/consult-lsp-badge.svg"/></a>
 
+*This is a Work In Progress*
+
+* Introduction
 The main command that makes LSP-mode better than eglot for me is the ability to
 see all the errors in one, or all workspaces. Since I use consult, let's try to
 mimic a few features of [[https://github.com/emacs-lsp/helm-lsp][helm-lsp]] in consult/selectrum workflow
 
 * Commands
-- consult-lsp-diagnostics :: Select diagnostics from workspace
+- consult-lsp-diagnostics :: Select diagnostics from current workspace. Pass
+  prefix argument to search all workspaces
+- consult-lsp-symbols :: Select symbols from current workspace. Pass prefix
+  argument to search all workspaces.
+
+There is currently no plan to add an interface to list and/or act on
+code-actions, but contributions are welcome!
+
+* Configuration
+As you can do with helm-lsp,
+
+Use the following lines to replace xref-find-apropos in lsp-mode controlled
+buffer.s
+
+#+begin_src emacs-lisp
+(define-key lsp-mode-map [remap xref-find-apropos] #'consult-lsp-symbols)
+#+end_src
