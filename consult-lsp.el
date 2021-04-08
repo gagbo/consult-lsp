@@ -68,14 +68,14 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     (?i . "Infos")
     (?h . "Hints")
     (?u . "Unknown"))
-  "Set of narrow keys for consult-lsp-diagnostics")
+  "Set of narrow keys for `consult-lsp-diagnostics'.")
 
 (defun consult-lsp-diagnostics--source (diag)
   "Convert source of DIAG to a propertized string."
   (propertize (lsp:diagnostic-source? diag) 'face 'success))
 
 (defun consult-lsp-diagnostics--diagnostic-marker (file diag)
-  "Return a marker at DIAG beginning."
+  "Return a marker in FILE at the beginning of DIAG."
   (consult--position-marker
    file
    (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range diag)))))
@@ -168,7 +168,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     ;; (?k . "Key")
     ;; (?o . "Operator")
     )
-  "Set of narrow keys for consult-lsp-symbols")
+  "Set of narrow keys for `consult-lsp-symbols'.")
 
 (defun consult-lsp-symbols--kind-to-narrow (symbol-info)
   "Get the narrow character for SYMBOL-INFO."
@@ -255,6 +255,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
         (_ (funcall async action))))))
 
 (defun consult-lsp-symbols--transformer (symbol-info)
+  "Default transformer to produce a completion candidate from SYMBOL-INFO."
   (propertize
    (format "%-7s %-5s %s %s"
            (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
