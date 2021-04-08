@@ -12,6 +12,14 @@ The main command that makes LSP-mode better than eglot for me is the ability to
 see all the errors in one, or all workspaces. Since I use consult, let's try to
 mimic a few features of [[https://github.com/emacs-lsp/helm-lsp][helm-lsp]] in consult/selectrum workflow
 
+* Screenshots
+
+#+caption: consult-lsp-diagnostics
+[[https://github.com/gagbo/consult-lsp/blob/screenshots/media/consult-lsp-diagnostics.png?raw=true]]
+
+#+caption: consult-lsp-symbols
+[[https://github.com/gagbo/consult-lsp/blob/screenshots/media/consult-lsp-symbols.png?raw=true]]
+
 * Commands
 - consult-lsp-diagnostics :: Select diagnostics from current workspace. Pass
   prefix argument to search all workspaces
