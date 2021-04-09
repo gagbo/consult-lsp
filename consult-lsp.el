@@ -111,7 +111,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
             file
             (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line))))
            (consult-lsp-diagnostics--source diag)
-           (string-replace "\n" " " (lsp:diagnostic-message diag)))
+           (replace-regexp-in-string "\n" " " (lsp:diagnostic-message diag)))
    'consult--candidate (cons file diag)
    'consult--type (consult-lsp-diagnostics--severity-to-type diag)))
 
