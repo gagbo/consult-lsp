@@ -65,21 +65,21 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 (defun consult-lsp--diagnostics--severity-to-level (diag)
   "Convert diagnostic severity of DIAG to a string."
-  (let ((sev (lsp:diagnostic-severity? diag)))
-    (cond ((= sev 1) (propertize "error" 'face 'error))
-          ((= sev 2) (propertize "warn" 'face 'warning))
-          ((= sev 3) (propertize "info" 'face 'success))
-          ((= sev 4) (propertize "hint" 'face 'italic))
-          (t "unknown"))))
+  (pcase (lsp:diagnostic-severity? diag)
+    (1 (propertize "error" 'face 'error))
+    (2 (propertize "warn" 'face 'warning))
+    (3 (propertize "info" 'face 'success))
+    (4 (propertize "hint" 'face 'italic))
+    (_ "unknown")))
 
 (defun consult-lsp--diagnostics--severity-to-type (diag)
   "Convert diagnostic severity of DIAG to a type for consult--type."
-  (let ((sev (lsp:diagnostic-severity? diag)))
-    (cond ((= sev 1) ?e)
-          ((= sev 2) ?w)
-          ((= sev 3) ?i)
-          ((= sev 4) ?h)
-          (t ?u))))
+  (pcase (lsp:diagnostic-severity? diag)
+    (1 (car (rassoc "Errors" consult-lsp--diagnostics--narrow)))
+    (2 (car (rassoc "Warnings" consult-lsp--diagnostics--narrow)))
+    (3 (car (rassoc "Infos" consult-lsp--diagnostics--narrow)))
+    (4 (car (rassoc "Hints" consult-lsp--diagnostics--narrow)))
+    (_ (car (rassoc "Unknown" consult-lsp--diagnostics--narrow)))))
 
 (defconst consult-lsp--diagnostics--narrow
   '((?e . "Errors")
@@ -185,29 +185,11 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 (defun consult-lsp--symbols--kind-to-narrow (symbol-info)
   "Get the narrow character for SYMBOL-INFO."
-  (pcase-exhaustive (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
-    ("Class" ?c)
-    ("Field" ?f)
-    ("Enum" ?e)
-    ("Interface" ?i)
-    ("Module" ?m)
-    ("Namespace" ?n)
-    ("Package" ?p)
-    ("Struct" ?s)
-    ("Type Parameter" ?t)
-    ("Variable" ?v)
-    ("Array" ?A)
-    ("Boolean" ?B)
-    ("Constant" ?C)
-    ("Enum Member" ?E)
-    ("Function" ?F)
-    ("Method" ?M)
-    ("Number" ?N)
-    ("Object" ?O)
-    ("Property" ?P)
-    ("String" ?S)
-    (_ ?o)))
-
+  (if-let ((pair (rassoc
+                  (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
+                  consult-lsp--symbols--narrow)))
+      (car pair)
+    ?o))
 
 (defun consult-lsp--symbols--state ()
   "Return a LSP symbol preview function."
