@@ -34,8 +34,6 @@
 ;; TODO: Use a custom format for the propertized candidates
 ;; TODO: Format the filenames better
 ;; TODO: Check the properties in LSP to see how sources should be used
-;; TODO: Fix weird behaviour in consult-lsp-symbols
-;;       (probably needs a "split" filter in the async chain)
 ;;; Code:
 
 (require 'consult)
@@ -44,7 +42,7 @@
 
 ;;;; Diagnostics
 
-(defun consult-lsp-diagnostics--flatten-diagnostics (transformer &optional current-workspace?)
+(defun consult-lsp--diagnostics--flatten-diagnostics (transformer &optional current-workspace?)
   "Flatten the list of LSP-mode diagnostics to consult candidates.
 
 TRANSFORMER takes (file diag) and returns a suitable element for
@@ -65,7 +63,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
             (sev-right (or (lsp:diagnostic-severity? diag-right) 12)))
        (< sev-left sev-right)))))
 
-(defun consult-lsp-diagnostics--severity-to-level (diag)
+(defun consult-lsp--diagnostics--severity-to-level (diag)
   "Convert diagnostic severity of DIAG to a string."
   (let ((sev (lsp:diagnostic-severity? diag)))
     (cond ((= sev 1) (propertize "error" 'face 'error))
@@ -74,7 +72,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
           ((= sev 4) (propertize "hint" 'face 'italic))
           (t "unknown"))))
 
-(defun consult-lsp-diagnostics--severity-to-type (diag)
+(defun consult-lsp--diagnostics--severity-to-type (diag)
   "Convert diagnostic severity of DIAG to a type for consult--type."
   (let ((sev (lsp:diagnostic-severity? diag)))
     (cond ((= sev 1) ?e)
@@ -83,7 +81,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
           ((= sev 4) ?h)
           (t ?u))))
 
-(defconst consult-lsp-diagnostics--narrow
+(defconst consult-lsp--diagnostics--narrow
   '((?e . "Errors")
     (?w . "Warnings")
     (?i . "Infos")
@@ -91,31 +89,31 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     (?u . "Unknown"))
   "Set of narrow keys for `consult-lsp-diagnostics'.")
 
-(defun consult-lsp-diagnostics--source (diag)
+(defun consult-lsp--diagnostics--source (diag)
   "Convert source of DIAG to a propertized string."
   (propertize (lsp:diagnostic-source? diag) 'face 'success))
 
-(defun consult-lsp-diagnostics--diagnostic-marker (file diag)
+(defun consult-lsp--diagnostics--diagnostic-marker (file diag)
   "Return a marker in FILE at the beginning of DIAG."
   (consult--position-marker
    file
    (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range diag)))))
    (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range diag)))))))
 
-(defun consult-lsp-diagnostics--transformer (file diag)
+(defun consult-lsp--diagnostics--transformer (file diag)
   "Transform LSP-mode diagnostics from a pair FILE DIAG to a candidate."
   (propertize
    (format "%-4s %-60.60s %.15s %s"
-           (consult-lsp-diagnostics--severity-to-level diag)
+           (consult-lsp--diagnostics--severity-to-level diag)
            (consult--format-location
             file
             (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line))))
-           (consult-lsp-diagnostics--source diag)
+           (consult-lsp--diagnostics--source diag)
            (replace-regexp-in-string "\n" " " (lsp:diagnostic-message diag)))
    'consult--candidate (cons file diag)
-   'consult--type (consult-lsp-diagnostics--severity-to-type diag)))
+   'consult--type (consult-lsp--diagnostics--severity-to-type diag)))
 
-(defun consult-lsp-diagnostics--state ()
+(defun consult-lsp--diagnostics--state ()
   "LSP diagnostic preview."
   (let ((open (consult--temporary-files))
         (jump (consult--jump-state)))
@@ -135,27 +133,21 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
   "Query LSP-mode diagnostics. When ARG is set through prefix, query all workspaces."
   (interactive "P")
   (let ((all-workspaces? arg))
-    (consult--read (consult-lsp-diagnostics--flatten-diagnostics #'consult-lsp-diagnostics--transformer (not all-workspaces?))
+    (consult--read (consult-lsp--diagnostics--flatten-diagnostics #'consult-lsp--diagnostics--transformer (not all-workspaces?))
                    :prompt (concat  "LSP Diagnostics " (when arg "(all workspaces) "))
                    :require-match t
                    :history t
                    :category 'consult-lsp-diagnostics
                    :sort nil
-                   :predicate
-                   (lambda (cand)
-                     (let ((key (get-text-property 0 'consult--type cand)))
-                       (if consult--narrow
-                           (= key consult--narrow)
-                         t)))
-                   :title (consult--type-title consult-lsp-diagnostics--narrow)
-                   :narrow (consult--type-narrow consult-lsp-diagnostics--narrow)
-                   :state (consult-lsp-diagnostics--state)
+                   :title (consult--type-title consult-lsp--diagnostics--narrow)
+                   :narrow (consult--type-narrow consult-lsp--diagnostics--narrow)
+                   :state (consult-lsp--diagnostics--state)
                    :lookup #'consult--lookup-candidate)))
 
 
 ;;;; Symbols
 
-(defconst consult-lsp-symbols--narrow
+(defconst consult-lsp--symbols--narrow
   '(
     ;; Lowercase classes
     (?c . "Class")
@@ -191,7 +183,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     )
   "Set of narrow keys for `consult-lsp-symbols'.")
 
-(defun consult-lsp-symbols--kind-to-narrow (symbol-info)
+(defun consult-lsp--symbols--kind-to-narrow (symbol-info)
   "Get the narrow character for SYMBOL-INFO."
   (pcase-exhaustive (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
     ("Class" ?c)
@@ -217,7 +209,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     (_ ?o)))
 
 
-(defun consult-lsp-symbols--state ()
+(defun consult-lsp--symbols--state ()
   "Return a LSP symbol preview function."
   (let ((open (consult--temporary-files))
         (jump (consult--jump-state)))
@@ -248,34 +240,34 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 ;; max count of results for queries (120 last time checked). Therefore, in
 ;; big projects the first query might not have the target result to filter on.
 ;; To avoid this issue, we use an async source that retriggers the request.
-(defun consult-lsp-symbols--make-async-source (async workspaces)
-  "Pipe a consult--read compatible async-source ASYNC to search for symbols in WORKSPACES."
-  (let ((cancel-token :consult-lsp-symbols))
+(defun consult-lsp--symbols--make-async-source (async workspaces)
+  "Pipe a `consult--read' compatible async-source ASYNC to search for symbols in WORKSPACES."
+  (let ((cancel-token :consult-lsp--symbols))
     (lambda (action)
       (pcase-exhaustive action
         ((or 'setup (pred stringp))
          (let ((query (if (stringp action) action "")))
            (with-lsp-workspaces workspaces
-             (-let (((request &as &plist :id new-request-id)))
-               (setq request-id new-request-id)
-               (consult--async-log "consult-lsp-symbols request started for %S\n" action)
-               (lsp-request-async
-                "workspace/symbol"
-                (list :query query)
-                (lambda (res)
-                  ;; Flush old candidates list
-                  (funcall async 'flush)
-                  (funcall async res))
-                :mode 'detached
-                :no-merge nil
-                :cancel-token cancel-token))))
+                                (-let (((request &as &plist :id new-request-id)))
+                                  (setq request-id new-request-id)
+                                  (consult--async-log "consult-lsp-symbols request started for %S\n" action)
+                                  (lsp-request-async
+                                   "workspace/symbol"
+                                   (list :query query)
+                                   (lambda (res)
+                                     ;; Flush old candidates list
+                                     (funcall async 'flush)
+                                     (funcall async res))
+                                   :mode 'detached
+                                   :no-merge nil
+                                   :cancel-token cancel-token))))
          (funcall async action))
         ('destroy
          (lsp-cancel-request-by-token cancel-token)
          (funcall async action))
         (_ (funcall async action))))))
 
-(defun consult-lsp-symbols--transformer (symbol-info)
+(defun consult-lsp--symbols--transformer (symbol-info)
   "Default transformer to produce a completion candidate from SYMBOL-INFO."
   (propertize
    (format "%-7s %-5s %s %s"
@@ -291,7 +283,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
               (lsp:position-line)
               (1+)
               (lsp-translate-line))))
-   'consult--type (consult-lsp-symbols--kind-to-narrow symbol-info)
+   'consult--type (consult-lsp--symbols--kind-to-narrow symbol-info)
    'consult--candidate symbol-info))
 
 ;;;###autoload
@@ -309,8 +301,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      (thread-first
          (consult--async-sink)
        (consult--async-refresh-immediate)
-       (consult--async-map #'consult-lsp-symbols--transformer)
-       (consult-lsp-symbols--make-async-source ws)
+       (consult--async-map #'consult-lsp--symbols--transformer)
+       (consult-lsp--symbols--make-async-source ws)
        (consult--async-throttle)
        (consult--async-split))
      :prompt "LSP Symbols "
@@ -319,15 +311,9 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      :initial consult-async-default-split
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
-     :predicate
-     (lambda (cand)
-       (let ((key (get-text-property 0 'consult--type cand)))
-         (if consult--narrow
-             (= key consult--narrow)
-           t)))
-     :title (consult--type-title consult-lsp-symbols--narrow)
-     :narrow (consult--type-narrow consult-lsp-symbols--narrow)
-     :state (consult-lsp-symbols--state))))
+     :title (consult--type-title consult-lsp--symbols--narrow)
+     :narrow (consult--type-narrow consult-lsp--symbols--narrow)
+     :state (consult-lsp--symbols--state))))
 
 
 
