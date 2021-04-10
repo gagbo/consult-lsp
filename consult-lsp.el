@@ -311,10 +311,12 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
        (consult--async-refresh-immediate)
        (consult--async-map #'consult-lsp-symbols--transformer)
        (consult-lsp-symbols--make-async-source ws)
-       (consult--async-throttle))
+       (consult--async-throttle)
+       (consult--async-split))
      :prompt "LSP Symbols "
      :require-match t
      :history t
+     :initial consult-async-default-split
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
      :predicate
