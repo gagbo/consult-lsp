@@ -257,7 +257,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
            (lsp:symbol-information-container-name? symbol-info)
            (lsp:symbol-information-name symbol-info)
            (consult--format-location
-            (rng-uri-file-name (lsp:location-uri (lsp:symbol-information-location symbol-info)))
+            (lsp--uri-to-path (lsp:location-uri (lsp:symbol-information-location symbol-info)))
             (thread-first symbol-info
               (lsp:symbol-information-location)
               (lsp:location-range)
