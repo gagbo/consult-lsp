@@ -4,7 +4,7 @@
 ;; Keywords: tools, completion, lsp
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
-;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.6"))
+;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.6") (f "0.20.0"))
 ;; Version: 0.1
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
@@ -32,12 +32,12 @@
 ;; Provides LSP-mode related commands for consult
 
 ;; TODO: Use a custom format for the propertized candidates
-;; TODO: Format the filenames better
 ;; TODO: Check the properties in LSP to see how sources should be used
 ;;; Code:
 
 (require 'consult)
 (require 'lsp)
+(require 'f)
 
 
 ;;;; Diagnostics
@@ -106,7 +106,9 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
    (format "%-4s %-60.60s %.15s %s"
            (consult-lsp--diagnostics--severity-to-level diag)
            (consult--format-location
-            file
+            (if-let ((wks (lsp-workspace-root file)))
+                (f-relative file wks)
+              file)
             (lsp-translate-line (1+ (lsp-get (lsp-get (lsp-get diag :range) :start) :line))))
            (consult-lsp--diagnostics--source diag)
            (replace-regexp-in-string "\n" " " (lsp:diagnostic-message diag)))
@@ -257,7 +259,11 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
            (lsp:symbol-information-container-name? symbol-info)
            (lsp:symbol-information-name symbol-info)
            (consult--format-location
-            (lsp--uri-to-path (lsp:location-uri (lsp:symbol-information-location symbol-info)))
+            (let ((file
+                   (lsp--uri-to-path (lsp:location-uri (lsp:symbol-information-location symbol-info)))))
+              (if-let ((wks (lsp-workspace-root file)))
+                  (f-relative file wks)
+                file))
             (thread-first symbol-info
               (lsp:symbol-information-location)
               (lsp:location-range)
