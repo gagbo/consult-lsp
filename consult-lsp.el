@@ -72,6 +72,14 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     (4 (propertize "hint" 'face 'italic))
     (_ "unknown")))
 
+(defconst consult-lsp--diagnostics--narrow
+  '((?e . "Errors")
+    (?w . "Warnings")
+    (?i . "Infos")
+    (?h . "Hints")
+    (?u . "Unknown"))
+  "Set of narrow keys for `consult-lsp-diagnostics'.")
+
 (defun consult-lsp--diagnostics--severity-to-type (diag)
   "Convert diagnostic severity of DIAG to a type for consult--type."
   (pcase (lsp:diagnostic-severity? diag)
@@ -80,14 +88,6 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
     (3 (car (rassoc "Infos" consult-lsp--diagnostics--narrow)))
     (4 (car (rassoc "Hints" consult-lsp--diagnostics--narrow)))
     (_ (car (rassoc "Unknown" consult-lsp--diagnostics--narrow)))))
-
-(defconst consult-lsp--diagnostics--narrow
-  '((?e . "Errors")
-    (?w . "Warnings")
-    (?i . "Infos")
-    (?h . "Hints")
-    (?u . "Unknown"))
-  "Set of narrow keys for `consult-lsp-diagnostics'.")
 
 (defun consult-lsp--diagnostics--source (diag)
   "Convert source of DIAG to a propertized string."
@@ -232,19 +232,17 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
         ((or 'setup (pred stringp))
          (let ((query (if (stringp action) action "")))
            (with-lsp-workspaces workspaces
-                                (-let (((request &as &plist :id new-request-id)))
-                                  (setq request-id new-request-id)
-                                  (consult--async-log "consult-lsp-symbols request started for %S\n" action)
-                                  (lsp-request-async
-                                   "workspace/symbol"
-                                   (list :query query)
-                                   (lambda (res)
-                                     ;; Flush old candidates list
-                                     (funcall async 'flush)
-                                     (funcall async res))
-                                   :mode 'detached
-                                   :no-merge nil
-                                   :cancel-token cancel-token))))
+             (consult--async-log "consult-lsp-symbols request started for %S\n" action)
+             (lsp-request-async
+              "workspace/symbol"
+              (list :query query)
+              (lambda (res)
+                ;; Flush old candidates list
+                (funcall async 'flush)
+                (funcall async res))
+              :mode 'detached
+              :no-merge nil
+              :cancel-token cancel-token)))
          (funcall async action))
         ('destroy
          (lsp-cancel-request-by-token cancel-token)
