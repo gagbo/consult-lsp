@@ -31,8 +31,8 @@ code-actions, but contributions are welcome!
 * Configuration
 As you can do with helm-lsp,
 
-Use the following lines to replace xref-find-apropos in lsp-mode controlled
-buffer.s
+Use the following line to replace xref-find-apropos in lsp-mode controlled
+buffers:
 
 #+begin_src emacs-lisp
 (define-key lsp-mode-map [remap xref-find-apropos] #'consult-lsp-symbols)
