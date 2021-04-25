@@ -6,9 +6,10 @@
 #+HTML: <a href="https://stable.melpa.org/#/consult-lsp"><img alt="MELPA Stable" src="https://stable.melpa.org/packages/consult-lsp-badge.svg"/></a>
 
 * Introduction
-The main command that makes LSP-mode better than eglot for me is the ability to
-see all the errors in one, or all workspaces. Since I use consult, let's try to
-mimic a few features of [[https://github.com/emacs-lsp/helm-lsp][helm-lsp]] in consult/selectrum workflow
+Helm and Ivy users have extra commands that leverage lsp-mode extra information, let's try to
+mimic a few features of [[https://github.com/emacs-lsp/helm-lsp][helm-lsp]] and
+[[https://github.com/emacs-lsp/lsp-ivy][lsp-ivy]] in consult workflow (tested only with
+selectrum for the time being)
 
 * Screenshots
 
