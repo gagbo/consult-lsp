@@ -273,9 +273,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 (defun consult-lsp--symbols--transformer (symbol-info)
   "Default transformer to produce a completion candidate from SYMBOL-INFO."
   (propertize
-   (format "%-7s %-5s %s %s"
+   (format "%-7s %s %s"
            (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
-           (lsp:symbol-information-container-name? symbol-info)
            (lsp:symbol-information-name symbol-info)
            (consult--format-location
             (let ((file
