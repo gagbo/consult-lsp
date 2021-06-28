@@ -4,8 +4,8 @@
 ;; Keywords: tools, completion, lsp
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
-;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.6") (f "0.20.0"))
-;; Version: 0.3
+;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.8") (f "0.20.0"))
+;; Version: 0.4
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;; Copyright (c) 2021 Gerry Agbobada
