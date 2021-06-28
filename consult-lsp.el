@@ -4,8 +4,8 @@
 ;; Keywords: tools, completion, lsp
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
-;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.6") (f "0.20.0"))
-;; Version: 0.3
+;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.8") (f "0.20.0"))
+;; Version: 0.4
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;; Copyright (c) 2021 Gerry Agbobada
@@ -162,7 +162,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
                    :history t
                    :category 'consult-lsp-diagnostics
                    :sort nil
-                   :title (consult--type-title consult-lsp--diagnostics--narrow)
+                   :group (consult--type-group consult-lsp--diagnostics--narrow)
                    :narrow (consult--type-narrow consult-lsp--diagnostics--narrow)
                    :state (consult-lsp--diagnostics--state)
                    :lookup #'consult--lookup-candidate)))
@@ -317,7 +317,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      :initial consult-async-default-split
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
-     :title (consult--type-title consult-lsp--symbols--narrow)
+     :group (consult--type-group consult-lsp--symbols--narrow)
      :narrow (consult--type-narrow consult-lsp--symbols--narrow)
      :state (consult-lsp--symbols--state))))
 
