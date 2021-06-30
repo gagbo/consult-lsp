@@ -4,7 +4,7 @@
 ;; Keywords: tools, completion, lsp
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
-;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.8") (f "0.20.0"))
+;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.9") (f "0.20.0"))
 ;; Version: 0.4
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
@@ -296,7 +296,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 (defun consult-lsp-symbols (arg)
   "Query workspace symbols. When ARG is set through prefix, query all workspaces."
   (interactive "P")
-  (let* ((all-workspaces? arg)
+  (let* ((initial "")
+         (all-workspaces? arg)
          (ws (or (and all-workspaces? (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session))))))
                  (lsp-workspaces)
                  (gethash (lsp-workspace-root default-directory)
@@ -314,7 +315,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      :prompt "LSP Symbols "
      :require-match t
      :history t
-     :initial consult-async-default-split
+     :initial (consult--async-split-initial initial)
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
      :group (consult--type-group consult-lsp--symbols--narrow)
