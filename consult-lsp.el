@@ -8,7 +8,7 @@
 ;; Version: 0.5
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
-;; Copyright (c) 2021 Gerry Agbobada
+;; Copyright (c) 2021 Gerry Agbobada and contributors
 ;;
 ;; Permission is hereby granted, free of charge, to any person obtaining a copy
 ;; of this software and associated documentation files (the "Software"), to deal
@@ -56,9 +56,23 @@
 ;; - checking the properties in LSP to see how symbol-sources should be used
 ;;; Code:
 
+(eval-when-compile
+  (require 'subr-x))
 (require 'consult)
 (require 'lsp)
 (require 'f)
+
+(defgroup consult-lsp nil
+  "Consult commands for `lsp-mode'."
+  :group 'tools
+  :prefix "consult-lsp-")
+
+;;;; Customization
+
+(defcustom consult-lsp-use-marginalia nil
+  "When non-nil, use the marginalia package for optional
+additional annotations."
+  :type 'boolean)
 
 
 ;;;; Diagnostics
@@ -321,6 +335,97 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      :group (consult--type-group consult-lsp--symbols--narrow)
      :narrow (consult--type-narrow consult-lsp--symbols--narrow)
      :state (consult-lsp--symbols--state))))
+
+
+;;;; File symbols
+
+(defun consult-lsp--flatten-document-symbols (to-flatten flattened)
+  "Helper function for flattening document symbols to a plain list."
+  (dolist (table to-flatten)
+    (when (hash-table-p table)
+      (push table flattened)
+      (when-let ((children (gethash "children" table)))
+        (setq flattened (consult-lsp--flatten-document-symbols
+                         (append children nil) ; convert children from vector to list
+                         flattened))
+        (remhash "children" table))))
+  flattened)
+
+(defun consult-lsp--file-symbols-candidates ()
+  "Returns all candidates for a `consult-lsp-file-symbols' search."
+  (consult--forbid-minibuffer)
+  (let ((all-symbols (consult-lsp--flatten-document-symbols
+                      (lsp-request "textDocument/documentSymbol"
+                                   (lsp-make-document-symbol-params :text-document
+                                                                    (lsp--text-document-identifier)))
+                      nil))
+        (candidates))
+    (dolist (symbol all-symbols)
+      (let ((line (thread-first symbol
+                    (lsp:document-symbol-selection-range)
+                    (lsp:range-start)
+                    (lsp:position-line)
+                    (lsp-translate-line)))
+            (cbeg (thread-first symbol
+                    (lsp:document-symbol-selection-range)
+                    (lsp:range-start)
+                    (lsp:position-character)
+                    (lsp-translate-column)))
+            (cend (thread-first symbol
+                    (lsp:document-symbol-selection-range)
+                    (lsp:range-end)
+                    (lsp:position-character)
+                    (lsp-translate-column))))
+        (let ((beg (lsp--line-character-to-point line cbeg))
+              (end (lsp--line-character-to-point line cend))
+              (marker (make-marker)))
+          (set-marker marker beg)
+          ;; Pre-condition to respect narrowing
+          (unless (or (< beg (point-min))
+                      (> end (point-max)))
+            (push (consult--location-candidate
+                   (consult--buffer-substring beg end 'fontify)
+                   marker
+                   (1+ line)
+                   'consult--type (lsp:symbol-information-kind symbol)
+                   'consult--name (lsp:symbol-information-name symbol))
+                  candidates)))))
+    (unless candidates
+      (user-error "No symbols"))
+    candidates))
+
+(defun consult-lsp--file-symbols-annotate ()
+  "Annotation function for `consult-lsp-file-symbols'."
+  (when consult-lsp-use-marginalia
+    (require 'marginalia))
+  (let* ((width (length (number-to-string (line-number-at-pos
+                                           (point-max)
+                                           consult-line-numbers-widen))))
+         (fmt (propertize (format "%%%dd " width) 'face 'consult-line-number-prefix)))
+    (lambda (cand)
+      (let ((line (cdr (get-text-property 0 'consult-location cand))))
+        (list cand (format fmt line)
+              (concat
+               (propertize (format " (%s)"
+                                   (alist-get (get-text-property 0 'consult--type cand)
+                                              lsp-symbol-kinds)) 'face 'font-lock-type-face)
+               (when consult-lsp-use-marginalia
+                 (marginalia--documentation (get-text-property 0 'consult--name cand)))))))))
+
+;;;###autoload
+(defun consult-lsp-file-symbols ()
+  "Search symbols defined in current file in a manner similar to `consult-line'."
+  (interactive)
+  (consult--read
+   (consult--with-increased-gc (consult-lsp--file-symbols-candidates))
+   :prompt "Go to symbol: "
+   :annotate (consult-lsp--file-symbols-annotate)
+   :require-match t
+   :sort nil
+   :history '(:input consult--line-history)
+   :category 'consult-lsp-file-symbols
+   :lookup #'consult--line-match
+   :state (consult--jump-state)))
 
 
 
