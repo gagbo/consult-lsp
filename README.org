@@ -24,6 +24,8 @@ selectrum for the time being)
   prefix argument to search all workspaces
 - consult-lsp-symbols :: Select symbols from current workspace. Pass prefix
   argument to search all workspaces.
+- consult-lsp-file-symbols :: Interactively select a symbol from the
+  current file, in a manner similar to consult-line.
 
 There is currently no plan to add an interface to list and/or act on
 code-actions, but contributions are welcome!
