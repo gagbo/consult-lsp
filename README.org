@@ -19,6 +19,9 @@ selectrum for the time being)
 #+caption: consult-lsp-symbols
 [[https://github.com/gagbo/consult-lsp/blob/screenshots/media/consult-lsp-symbols.png?raw=true]]
 
+#+caption: consult-lsp-file-symbols
+[[https://github.com/gagbo/consult-lsp/blob/screenshots/media/consult-lsp-file-symbols.png?raw=true]]
+
 * Commands
 - consult-lsp-diagnostics :: Select diagnostics from current workspace. Pass
   prefix argument to search all workspaces
