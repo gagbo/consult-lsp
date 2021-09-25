@@ -38,6 +38,31 @@ There is currently no plan to add an interface to list and/or act on
 code-actions, but contributions are welcome!
 
 * Configuration
+** Marginalia support
+=consult-lsp-use-marginalia= will use marginalia for annotations if the variable
+is non-nil, and marginalia-mode is active.
+
+** Customize Look and Feel
+
+This package provides 2 entry points per command in order to customize the
+appearance of candidates in the selection/completion interface. This is mostly
+for advanced users who are somewhat familiar with consult API:
+
+- =*-transformer-function= :: Adapter function, responsible for transforming lsp
+  data into a valid consult candidate. a valid "consult candidate" is more often
+  than not a propertized string, with specific properties to enable extra
+  features.
+- =*-annotate-builder-function= :: Builder function, which returns a valid
+  lambda for annotation/affixation support. This allows to add extra information
+  to the candidates in the interface. The _returned_ lambda must take 1 argument
+  and produce either a single string or a list of 3 elements (candidate prefix
+  suffix), just as expected by either annotation-function or affixation-function
+
+You are encouraged to take a look at the default values if you wish to customize
+these, especially the `file-symbols` one, which is probably the easiest ones to
+grok, and use marginalia.
+
+** Keys
 As you can do with helm-lsp,
 
 Use the following line to replace xref-find-apropos in lsp-mode controlled
