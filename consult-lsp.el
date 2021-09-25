@@ -49,9 +49,14 @@
 ;; You can use prefixes as well to filter candidates per type, and
 ;; previewing/selecting a candidate will go to it.
 ;;
+;;;; File symbols
+;; M-x consult-lsp-file-symbols provides a selection/narrowing command to search
+;; and go to any arbitrary symbol in the selected buffer (like imenu)
+;;
 ;;;; Contributions
 ;; Possible contributions for ameliorations include:
 ;; - using a custom format for the propertized candidates
+;;   This should be done with :type 'function custom variables probably.
 ;; - checking the properties in LSP to see how diagnostic-sources should be used
 ;; - checking the properties in LSP to see how symbol-sources should be used
 ;;; Code:
@@ -61,6 +66,8 @@
 (require 'consult)
 (require 'lsp)
 (require 'f)
+
+(declare-function #'marginalia--documentation "marginalia")
 
 (defgroup consult-lsp nil
   "Consult commands for `lsp-mode'."
@@ -72,7 +79,8 @@
 (defcustom consult-lsp-use-marginalia nil
   "When non-nil, use the marginalia package for optional
 additional annotations."
-  :type 'boolean)
+  :type 'boolean
+  :group 'consult-lsp)
 
 
 ;;;; Diagnostics
@@ -351,53 +359,56 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
         (remhash "children" table))))
   flattened)
 
+(defun consult-lsp--file-symbols--transformer (symbol)
+  "Default transformer to produce a completion candidate from SYMBOL."
+  (let ((line (thread-first symbol
+                (lsp:document-symbol-selection-range)
+                (lsp:range-start)
+                (lsp:position-line)
+                (lsp-translate-line)))
+        (cbeg (thread-first symbol
+                (lsp:document-symbol-selection-range)
+                (lsp:range-start)
+                (lsp:position-character)
+                (lsp-translate-column)))
+        (cend (thread-first symbol
+                (lsp:document-symbol-selection-range)
+                (lsp:range-end)
+                (lsp:position-character)
+                (lsp-translate-column))))
+    (let ((beg (lsp--line-character-to-point line cbeg))
+          (end (lsp--line-character-to-point line cend))
+          (marker (make-marker)))
+      (set-marker marker beg)
+      ;; Pre-condition to respect narrowing
+      (unless (or (< beg (point-min))
+                  (> end (point-max)))
+        (consult--location-candidate
+         ;; (consult--buffer-substring beg end 'fontify)
+         (lsp:symbol-information-name symbol)
+         marker
+         (1+ line)
+         'consult--type (lsp:symbol-information-kind symbol)
+         'consult--name (lsp:symbol-information-name symbol)
+         'consult--details (lsp:document-symbol-detail? symbol))))))
+
 (defun consult-lsp--file-symbols-candidates ()
-  "Returns all candidates for a `consult-lsp-file-symbols' search."
+  "Returns all candidates for a `consult-lsp-file-symbols' search.
+
+See the :annotate documentation of `consult--read' for more information."
   (consult--forbid-minibuffer)
-  (let ((all-symbols (consult-lsp--flatten-document-symbols
-                      (lsp-request "textDocument/documentSymbol"
-                                   (lsp-make-document-symbol-params :text-document
-                                                                    (lsp--text-document-identifier)))
-                      nil))
-        (candidates))
-    (dolist (symbol all-symbols)
-      (let ((line (thread-first symbol
-                    (lsp:document-symbol-selection-range)
-                    (lsp:range-start)
-                    (lsp:position-line)
-                    (lsp-translate-line)))
-            (cbeg (thread-first symbol
-                    (lsp:document-symbol-selection-range)
-                    (lsp:range-start)
-                    (lsp:position-character)
-                    (lsp-translate-column)))
-            (cend (thread-first symbol
-                    (lsp:document-symbol-selection-range)
-                    (lsp:range-end)
-                    (lsp:position-character)
-                    (lsp-translate-column))))
-        (let ((beg (lsp--line-character-to-point line cbeg))
-              (end (lsp--line-character-to-point line cend))
-              (marker (make-marker)))
-          (set-marker marker beg)
-          ;; Pre-condition to respect narrowing
-          (unless (or (< beg (point-min))
-                      (> end (point-max)))
-            (push (consult--location-candidate
-                   (consult--buffer-substring beg end 'fontify)
-                   marker
-                   (1+ line)
-                   'consult--type (lsp:symbol-information-kind symbol)
-                   'consult--name (lsp:symbol-information-name symbol))
-                  candidates)))))
+  (let* ((all-symbols (consult-lsp--flatten-document-symbols
+                       (lsp-request "textDocument/documentSymbol"
+                                    (lsp-make-document-symbol-params :text-document
+                                                                     (lsp--text-document-identifier)))
+                       nil))
+         (candidates (mapcar #'consult-lsp--file-symbols--transformer all-symbols)))
     (unless candidates
       (user-error "No symbols"))
     candidates))
 
 (defun consult-lsp--file-symbols-annotate ()
   "Annotation function for `consult-lsp-file-symbols'."
-  (when consult-lsp-use-marginalia
-    (require 'marginalia))
   (let* ((width (length (number-to-string (line-number-at-pos
                                            (point-max)
                                            consult-line-numbers-widen))))
@@ -409,8 +420,11 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
                (propertize (format " (%s)"
                                    (alist-get (get-text-property 0 'consult--type cand)
                                               lsp-symbol-kinds)) 'face 'font-lock-type-face)
-               (when consult-lsp-use-marginalia
-                 (marginalia--documentation (get-text-property 0 'consult--name cand)))))))))
+               ;; Append details to marginalia if active, or to classic annotation otherwise
+               (when-let ((details (get-text-property 0 'consult--details cand)))
+                 (if (and consult-lsp-use-marginalia (bound-and-true-p marginalia-mode))
+                     (marginalia--documentation details)
+                   (propertize (format " - %s" details) 'face 'shadow)))))))))
 
 ;;;###autoload
 (defun consult-lsp-file-symbols ()
