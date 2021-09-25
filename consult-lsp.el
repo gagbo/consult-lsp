@@ -66,6 +66,7 @@
 (require 'consult)
 (require 'lsp)
 (require 'f)
+(require 'cl-lib)
 
 (declare-function #'marginalia--documentation "marginalia")
 
@@ -347,17 +348,20 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
 
 ;;;; File symbols
 
-(defun consult-lsp--flatten-document-symbols (to-flatten flattened)
+(defun consult-lsp--flatten-document-symbols (to-flatten)
   "Helper function for flattening document symbols to a plain list."
-  (dolist (table to-flatten)
-    (when (hash-table-p table)
-      (push table flattened)
-      (when-let ((children (gethash "children" table)))
-        (setq flattened (consult-lsp--flatten-document-symbols
-                         (append children nil) ; convert children from vector to list
-                         flattened))
-        (remhash "children" table))))
-  flattened)
+  (cl-labels ((rec-helper
+               (to-flatten accumulator)
+               (dolist (table to-flatten)
+                 (when (hash-table-p table)
+                   (push table accumulator)
+                   (when-let ((children (gethash "children" table)))
+                     (setq accumulator (rec-helper
+                                        (append children nil) ; convert children from vector to list
+                                        accumulator))
+                     (remhash "children" table))))
+               accumulator))
+    (nreverse (rec-helper to-flatten nil))))
 
 (defun consult-lsp--file-symbols--transformer (symbol)
   "Default transformer to produce a completion candidate from SYMBOL."
@@ -400,8 +404,7 @@ See the :annotate documentation of `consult--read' for more information."
   (let* ((all-symbols (consult-lsp--flatten-document-symbols
                        (lsp-request "textDocument/documentSymbol"
                                     (lsp-make-document-symbol-params :text-document
-                                                                     (lsp--text-document-identifier)))
-                       nil))
+                                                                     (lsp--text-document-identifier)))))
          (candidates (mapcar #'consult-lsp--file-symbols--transformer all-symbols)))
     (unless candidates
       (user-error "No symbols"))
