@@ -392,7 +392,7 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
          (lsp:symbol-information-name symbol)
          marker
          (1+ line)
-         'consult--type (lsp:symbol-information-kind symbol)
+         'consult--type (consult-lsp--symbols--kind-to-narrow symbol)
          'consult--name (lsp:symbol-information-name symbol)
          'consult--details (lsp:document-symbol-detail? symbol))))))
 
@@ -420,14 +420,11 @@ See the :annotate documentation of `consult--read' for more information."
       (let ((line (cdr (get-text-property 0 'consult-location cand))))
         (list cand (format fmt line)
               (concat
-               (propertize (format " (%s)"
-                                   (alist-get (get-text-property 0 'consult--type cand)
-                                              lsp-symbol-kinds)) 'face 'font-lock-type-face)
                ;; Append details to marginalia if active, or to classic annotation otherwise
                (when-let ((details (get-text-property 0 'consult--details cand)))
                  (if (and consult-lsp-use-marginalia (bound-and-true-p marginalia-mode))
                      (marginalia--documentation details)
-                   (propertize (format " - %s" details) 'face 'shadow)))))))))
+                   (propertize (format " - %s" details) 'face 'font-lock-doc-face)))))))))
 
 ;;;###autoload
 (defun consult-lsp-file-symbols ()
@@ -442,6 +439,8 @@ See the :annotate documentation of `consult--read' for more information."
    :history '(:input consult--line-history)
    :category 'consult-lsp-file-symbols
    :lookup #'consult--line-match
+   :group (consult--type-group consult-lsp--symbols--narrow)
+   :narrow (consult--type-narrow consult-lsp--symbols--narrow)
    :state (consult--jump-state)))
 
 
