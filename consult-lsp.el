@@ -68,21 +68,12 @@
 (require 'f)
 (require 'cl-lib)
 
-(declare-function #'marginalia--documentation "marginalia")
-
 (defgroup consult-lsp nil
   "Consult commands for `lsp-mode'."
   :group 'tools
   :prefix "consult-lsp-")
 
 ;;;; Customization
-
-(defcustom consult-lsp-use-marginalia nil
-  "When non-nil, use the marginalia package for optional
-additional annotations."
-  :type 'boolean
-  :group 'consult-lsp)
-
 (defcustom consult-lsp-diagnostics-transformer-function #'consult-lsp--diagnostics--transformer
   "Function that transform LSP-mode diagnostic from a (file diag) pair to a candidate for `consult-lsp-diagnostics'."
   :type 'function
@@ -202,11 +193,8 @@ in candidates."
                (format "%s %s"
                        (consult-lsp--diagnostics--severity-to-level diag)
                        (replace-regexp-in-string "\n" " " (lsp:diagnostic-message diag)))
-               ;; Append details to marginalia if active, or to classic annotation otherwise
                (when-let ((source (consult-lsp--diagnostics--source diag)))
-                 (if (and consult-lsp-use-marginalia (bound-and-true-p marginalia-mode))
-                     (marginalia--documentation source)
-                   (propertize (format " - %s" source) 'face 'font-lock-doc-face)))))))))
+                 (propertize (format " - %s" source) 'face 'font-lock-doc-face))))))))
 
 (defun consult-lsp--diagnostics--state ()
   "LSP diagnostic preview."
@@ -346,8 +334,21 @@ in candidates."
 (defun consult-lsp--symbols--transformer (symbol-info)
   "Default transformer to produce a completion candidate from SYMBOL-INFO."
   (propertize
-   (format "%s"
-           (lsp:symbol-information-name symbol-info))
+   (format "%s (%s)"
+           (lsp:symbol-information-name symbol-info)
+           (consult--format-location
+            (let ((file
+                   (lsp--uri-to-path (lsp:location-uri (lsp:symbol-information-location symbol-info)))))
+              (if-let ((wks (lsp-workspace-root file)))
+                  (f-relative file wks)
+                file))
+            (thread-first symbol-info
+              (lsp:symbol-information-location)
+              (lsp:location-range)
+              (lsp:range-start)
+              (lsp:position-line)
+              (1+)
+              (lsp-translate-line))))
    'consult--type (consult-lsp--symbols--kind-to-narrow symbol-info)
    'consult--candidate symbol-info
    'consult--details (lsp:document-symbol-detail? symbol-info)))
@@ -383,18 +384,9 @@ usable in the annotation-function."
                      (if-let ((wks (lsp-workspace-root file)))
                          (f-relative file wks)
                        file))
-                   (thread-first symbol-info
-                     (lsp:symbol-information-location)
-                     (lsp:location-range)
-                     (lsp:range-start)
-                     (lsp:position-line)
-                     (1+)
-                     (lsp-translate-line))))
-          ;; Append details to marginalia if active, or to classic annotation otherwise
+                   line))
           (when-let ((details (get-text-property 0 'consult--details cand)))
-            (if (and consult-lsp-use-marginalia (bound-and-true-p marginalia-mode))
-                (marginalia--documentation details)
-              (propertize (format " - %s" details) 'face 'font-lock-doc-face)))))))))
+            (propertize (format " - %s" details) 'face 'font-lock-doc-face))))))))
 
 ;;;###autoload
 (defun consult-lsp-symbols (arg)
@@ -507,11 +499,8 @@ See the :annotate documentation of `consult--read' for more information."
         (list cand
               (format fmt line)
               (concat
-               ;; Append details to marginalia if active, or to classic annotation otherwise
                (when-let ((details (get-text-property 0 'consult--details cand)))
-                 (if (and consult-lsp-use-marginalia (bound-and-true-p marginalia-mode))
-                     (marginalia--documentation details)
-                   (propertize (format " - %s" details) 'face 'font-lock-doc-face)))))))))
+                 (propertize (format " - %s" details) 'face 'font-lock-doc-face))))))))
 
 ;;;###autoload
 (defun consult-lsp-file-symbols ()
