@@ -39,8 +39,11 @@ code-actions, but contributions are welcome!
 
 * Configuration
 ** Marginalia support
-=consult-lsp-use-marginalia= will use marginalia for annotations if the variable
-is non-nil, and marginalia-mode is active.
+The =consult-lsp-marginalia-mode= global minor mode is included in the package,
+and provides basic marginalia integration.
+
+The file is small, and I am not very proficient with Marginalia yet, but it
+might become a separate package later.
 
 ** Customize Look and Feel
 
@@ -63,6 +66,17 @@ these, especially the `file-symbols` one, which is probably the easiest ones to
 grok, and use marginalia.
 
 ** Keys
+*** Categories for symbols
+=consult-lsp-symbols= and =consult-lsp-file-symbols= can have the set of
+"narrow" keys you like by customizing =consult-lsp-symbols-narrow=.
+
+The ~cdrs~ of the alist must match the symbol types returned by LSP servers, AND
+have an "Other" key for everything that is not included.
+
+You can find categories by looking for the [[https://microsoft.github.io/language-server-protocol/specification.html#textDocument_documentSymbol][SymbolKind enum]] in the LSP
+specification.
+
+*** Bindings
 As you can do with helm-lsp,
 
 Use the following line to replace xref-find-apropos in lsp-mode controlled

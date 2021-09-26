@@ -104,6 +104,47 @@
   :type 'function
   :group 'consult-lsp)
 
+(defcustom consult-lsp-symbols-narrow
+  '(
+    ;; Lowercase classes
+    (?c . "Class")
+    (?f . "Field")
+    (?e . "Enum")
+    (?i . "Interface")
+    (?m . "Module")
+    (?n . "Namespace")
+    (?p . "Package")
+    (?s . "Struct")
+    (?t . "Type Parameter")
+    (?v . "Variable")
+
+    ;; Uppercase classes
+    (?A . "Array")
+    (?B . "Boolean")
+    (?C . "Constant")
+    (?E . "Enum Member")
+    (?F . "Function")
+    (?M . "Method")
+    (?N . "Number")
+    (?O . "Object")
+    (?P . "Property")
+    (?S . "String")
+
+    (?o . "Other")
+    ;; Example types included in "Other" (i.e. the ignored)
+    ;; (?n . "Null")
+    ;; (?c . "Constructor")
+    ;; (?e . "Event")
+    ;; (?k . "Key")
+    ;; (?o . "Operator")
+    )
+  "Set of narrow keys for `consult-lsp-symbols' and `consult-lsp-file-symbols'.
+
+It MUST have a \"Other\" category for everything that is not listed."
+  :group 'consult-lsp
+  :type '(alist :key-type character :value-type string))
+
+
 
 ;;;; Diagnostics
 
@@ -231,49 +272,13 @@ in candidates."
 
 ;;;; Symbols
 
-(defconst consult-lsp--symbols--narrow
-  '(
-    ;; Lowercase classes
-    (?c . "Class")
-    (?f . "Field")
-    (?e . "Enum")
-    (?i . "Interface")
-    (?m . "Module")
-    (?n . "Namespace")
-    (?p . "Package")
-    (?s . "Struct")
-    (?t . "Type Parameter")
-    (?v . "Variable")
-
-    ;; Uppercase classes
-    (?A . "Array")
-    (?B . "Boolean")
-    (?C . "Constant")
-    (?E . "Enum Member")
-    (?F . "Function")
-    (?M . "Method")
-    (?N . "Number")
-    (?O . "Object")
-    (?P . "Property")
-    (?S . "String")
-
-    (?o . "Other")
-    ;; Types included in "Other" (i.e. the ignored)
-    ;; (?n . "Null")
-    ;; (?c . "Constructor")
-    ;; (?e . "Event")
-    ;; (?k . "Key")
-    ;; (?o . "Operator")
-    )
-  "Set of narrow keys for `consult-lsp-symbols' and `consult-lsp-file-symbols'.")
-
 (defun consult-lsp--symbols--kind-to-narrow (symbol-info)
   "Get the narrow character for SYMBOL-INFO."
   (if-let ((pair (rassoc
                   (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds)
-                  consult-lsp--symbols--narrow)))
+                  consult-lsp-symbols-narrow)))
       (car pair)
-    ?o))
+    (rassoc "Other" consult-lsp-symbols-narrow)))
 
 (defun consult-lsp--symbols--state ()
   "Return a LSP symbol preview function."
@@ -334,7 +339,12 @@ in candidates."
 (defun consult-lsp--symbols--transformer (symbol-info)
   "Default transformer to produce a completion candidate from SYMBOL-INFO."
   (propertize
-   (format "%s (%s)"
+   ;; We have to add the location in the candidate string for 2 purposes,
+   ;; in case symbols have the same name:
+   ;; - being able to narrow using the path
+   ;; - because it breaks marginalia integration otherwise
+   ;;   (it uses a cache where candidates are caching keys through `marginalia--cached')
+   (format "%s — %s"
            (lsp:symbol-information-name symbol-info)
            (consult--format-location
             (let ((file
@@ -373,20 +383,13 @@ usable in the annotation-function."
                      (lsp-translate-line))))
         (list
          cand
-         ""
+         (format " %-7s"
+                 (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds))
          (concat
-          (format " %-7s"
-                  (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds))
-          (format " %s"
-                  (consult--format-location
-                   (let ((file
-                          (lsp--uri-to-path (lsp:location-uri (lsp:symbol-information-location symbol-info)))))
-                     (if-let ((wks (lsp-workspace-root file)))
-                         (f-relative file wks)
-                       file))
-                   line))
-          (when-let ((details (get-text-property 0 'consult--details cand)))
-            (propertize (format " - %s" details) 'face 'font-lock-doc-face))))))))
+          (or
+           (when-let ((details (get-text-property 0 'consult--details cand)))
+             (propertize (format " — %s" details) 'face 'font-lock-doc-face))
+           "")))))))
 
 ;;;###autoload
 (defun consult-lsp-symbols (arg)
@@ -415,8 +418,8 @@ usable in the annotation-function."
      :initial (consult--async-split-initial initial)
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
-     :group (consult--type-group consult-lsp--symbols--narrow)
-     :narrow (consult--type-narrow consult-lsp--symbols--narrow)
+     :group (consult--type-group consult-lsp-symbols-narrow)
+     :narrow (consult--type-narrow consult-lsp-symbols-narrow)
      :state (consult-lsp--symbols--state))))
 
 
@@ -461,6 +464,15 @@ usable in the annotation-function."
       ;; Pre-condition to respect narrowing
       (unless (or (< beg (point-min))
                   (> end (point-max)))
+        ;; NOTE: no need to add anything to the candidate string like
+        ;; for consult-lsp-symbols because
+        ;; - we have the line location and there are less hits in this command,
+        ;; - the candidates are different caching keys because of
+        ;;   `consult--location-candidate' usage.
+        ;;
+        ;; `consult--location-candidate' is unavailable for
+        ;; `consult-lsp--symbols--transformer'because it needs a marker,
+        ;; and we cannot create marker for buffers that aren't open.
         (consult--location-candidate
          (let ((substr (consult--buffer-substring beg end 'fontify))
                (symb-info-name (lsp:symbol-information-name symbol)))
@@ -515,7 +527,7 @@ See the :annotate documentation of `consult--read' for more information."
    :history '(:input consult--line-history)
    :category 'consult-lsp-file-symbols
    :lookup #'consult--line-match
-   :narrow (consult--type-narrow consult-lsp--symbols--narrow)
+   :narrow (consult--type-narrow consult-lsp-symbols-narrow)
    :state (consult--jump-state)))
 
 
