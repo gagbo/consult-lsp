@@ -440,7 +440,6 @@ See the :annotate documentation of `consult--read' for more information."
    :history '(:input consult--line-history)
    :category 'consult-lsp-file-symbols
    :lookup #'consult--line-match
-   :group (consult--type-group consult-lsp--symbols--narrow)
    :narrow (consult--type-narrow consult-lsp--symbols--narrow)
    :state (consult--jump-state)))
 
