@@ -8,7 +8,7 @@
 ;; Version: 0.5
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
-;; Copyright (c) 2021 Gerry Agbobada
+;; Copyright (c) 2021 Gerry Agbobada and contributors
 ;;
 ;; Permission is hereby granted, free of charge, to any person obtaining a copy
 ;; of this software and associated documentation files (the "Software"), to deal
@@ -49,16 +49,39 @@
 ;; You can use prefixes as well to filter candidates per type, and
 ;; previewing/selecting a candidate will go to it.
 ;;
+;;;; File symbols
+;; M-x consult-lsp-file-symbols provides a selection/narrowing command to search
+;; and go to any arbitrary symbol in the selected buffer (like imenu)
+;;
 ;;;; Contributions
 ;; Possible contributions for ameliorations include:
 ;; - using a custom format for the propertized candidates
+;;   This should be done with :type 'function custom variables probably.
 ;; - checking the properties in LSP to see how diagnostic-sources should be used
 ;; - checking the properties in LSP to see how symbol-sources should be used
 ;;; Code:
 
+(eval-when-compile
+  (require 'subr-x))
 (require 'consult)
 (require 'lsp)
 (require 'f)
+(require 'cl-lib)
+
+(declare-function #'marginalia--documentation "marginalia")
+
+(defgroup consult-lsp nil
+  "Consult commands for `lsp-mode'."
+  :group 'tools
+  :prefix "consult-lsp-")
+
+;;;; Customization
+
+(defcustom consult-lsp-use-marginalia nil
+  "When non-nil, use the marginalia package for optional
+additional annotations."
+  :type 'boolean
+  :group 'consult-lsp)
 
 
 ;;;; Diagnostics
@@ -321,6 +344,107 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      :group (consult--type-group consult-lsp--symbols--narrow)
      :narrow (consult--type-narrow consult-lsp--symbols--narrow)
      :state (consult-lsp--symbols--state))))
+
+
+;;;; File symbols
+
+(defun consult-lsp--flatten-document-symbols (to-flatten)
+  "Helper function for flattening document symbols to a plain list."
+  (cl-labels ((rec-helper
+               (to-flatten accumulator)
+               (dolist (table to-flatten)
+                 (when (hash-table-p table)
+                   (push table accumulator)
+                   (when-let ((children (gethash "children" table)))
+                     (setq accumulator (rec-helper
+                                        (append children nil) ; convert children from vector to list
+                                        accumulator))
+                     (remhash "children" table))))
+               accumulator))
+    (nreverse (rec-helper to-flatten nil))))
+
+(defun consult-lsp--file-symbols--transformer (symbol)
+  "Default transformer to produce a completion candidate from SYMBOL."
+  (let ((line (thread-first symbol
+                (lsp:document-symbol-selection-range)
+                (lsp:range-start)
+                (lsp:position-line)
+                (lsp-translate-line)))
+        (cbeg (thread-first symbol
+                (lsp:document-symbol-selection-range)
+                (lsp:range-start)
+                (lsp:position-character)
+                (lsp-translate-column)))
+        (cend (thread-first symbol
+                (lsp:document-symbol-selection-range)
+                (lsp:range-end)
+                (lsp:position-character)
+                (lsp-translate-column))))
+    (let ((beg (lsp--line-character-to-point line cbeg))
+          (end (lsp--line-character-to-point line cend))
+          (marker (make-marker)))
+      (set-marker marker beg)
+      ;; Pre-condition to respect narrowing
+      (unless (or (< beg (point-min))
+                  (> end (point-max)))
+        (consult--location-candidate
+         (let ((substr (consult--buffer-substring beg end 'fontify))
+               (symb-info-name (lsp:symbol-information-name symbol)))
+           (concat substr
+                   (unless (string= substr symb-info-name)
+                     (format " (%s)"
+                             symb-info-name))))
+         marker
+         (1+ line)
+         'consult--type (consult-lsp--symbols--kind-to-narrow symbol)
+         'consult--name (lsp:symbol-information-name symbol)
+         'consult--details (lsp:document-symbol-detail? symbol))))))
+
+(defun consult-lsp--file-symbols-candidates ()
+  "Returns all candidates for a `consult-lsp-file-symbols' search.
+
+See the :annotate documentation of `consult--read' for more information."
+  (consult--forbid-minibuffer)
+  (let* ((all-symbols (consult-lsp--flatten-document-symbols
+                       (lsp-request "textDocument/documentSymbol"
+                                    (lsp-make-document-symbol-params :text-document
+                                                                     (lsp--text-document-identifier)))))
+         (candidates (mapcar #'consult-lsp--file-symbols--transformer all-symbols)))
+    (unless candidates
+      (user-error "No symbols"))
+    candidates))
+
+(defun consult-lsp--file-symbols-annotate ()
+  "Annotation function for `consult-lsp-file-symbols'."
+  (let* ((width (length (number-to-string (line-number-at-pos
+                                           (point-max)
+                                           consult-line-numbers-widen))))
+         (fmt (propertize (format "%%%dd " width) 'face 'consult-line-number-prefix)))
+    (lambda (cand)
+      (let ((line (cdr (get-text-property 0 'consult-location cand))))
+        (list cand (format fmt line)
+              (concat
+               ;; Append details to marginalia if active, or to classic annotation otherwise
+               (when-let ((details (get-text-property 0 'consult--details cand)))
+                 (if (and consult-lsp-use-marginalia (bound-and-true-p marginalia-mode))
+                     (marginalia--documentation details)
+                   (propertize (format " - %s" details) 'face 'font-lock-doc-face)))))))))
+
+;;;###autoload
+(defun consult-lsp-file-symbols ()
+  "Search symbols defined in current file in a manner similar to `consult-line'."
+  (interactive)
+  (consult--read
+   (consult--with-increased-gc (consult-lsp--file-symbols-candidates))
+   :prompt "Go to symbol: "
+   :annotate (consult-lsp--file-symbols-annotate)
+   :require-match t
+   :sort nil
+   :history '(:input consult--line-history)
+   :category 'consult-lsp-file-symbols
+   :lookup #'consult--line-match
+   :narrow (consult--type-narrow consult-lsp--symbols--narrow)
+   :state (consult--jump-state)))
 
 
 
