@@ -13,6 +13,10 @@ selectrum for the time being)
 
 * Screenshots
 
+They tend not to be updated as often as changes happen, sorry if there are
+slight differences in UI. Those shots are more about giving an idea of what's
+happening.
+
 #+caption: consult-lsp-diagnostics
 [[https://github.com/gagbo/consult-lsp/blob/screenshots/media/consult-lsp-diagnostics.png?raw=true]]
 
