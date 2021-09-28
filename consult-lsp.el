@@ -388,8 +388,9 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
       (unless (or (< beg (point-min))
                   (> end (point-max)))
         (consult--location-candidate
-         ;; (consult--buffer-substring beg end 'fontify)
-         (lsp:symbol-information-name symbol)
+         (concat (consult--buffer-substring beg end 'fontify)
+                 (format " (%s)"
+                         (lsp:symbol-information-name symbol)))
          marker
          (1+ line)
          'consult--type (consult-lsp--symbols--kind-to-narrow symbol)
