@@ -242,15 +242,17 @@ in candidates."
   (let ((open (consult--temporary-files))
         (jump (consult--jump-state)))
     (lambda (cand restore)
-      (when restore
-        (funcall open nil))
-      (when cand
+      (cond
+       (cand
         (funcall jump
                  (consult--position-marker
                   (and (car cand) (funcall (if restore #'find-file open) (car cand)))
                   (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr cand))))))
                   (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr cand)))))))
-                 restore)))))
+                 restore))
+       (restore
+        (funcall jump nil t)
+        (funcall open nil))))))
 
 ;;;###autoload
 (defun consult-lsp-diagnostics (arg)
