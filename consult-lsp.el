@@ -229,10 +229,9 @@ in candidates."
     (lambda (cand)
       (let* ((diag (cdr (get-text-property 0 'consult--candidate cand))))
         (list cand
-              (consult-lsp--diagnostics--severity-to-level diag)
+              (format "%-5s " (consult-lsp--diagnostics--severity-to-level diag))
               (concat
-               (format "%s %s"
-                       (consult-lsp--diagnostics--severity-to-level diag)
+               (format "%s"
                        (replace-regexp-in-string "\n" " " (lsp:diagnostic-message diag)))
                (when-let ((source (consult-lsp--diagnostics--source diag)))
                  (propertize (format " - %s" source) 'face 'font-lock-doc-face))))))))
