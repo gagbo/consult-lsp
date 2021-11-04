@@ -384,7 +384,7 @@ usable in the annotation-function."
                      (lsp-translate-line))))
         (list
          cand
-         (format " %-7s"
+         (format "%-10s "
                  (alist-get (lsp:symbol-information-kind symbol-info) lsp-symbol-kinds))
          (concat
           (or
