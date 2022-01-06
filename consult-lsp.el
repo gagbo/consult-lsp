@@ -516,9 +516,12 @@ See the :annotate documentation of `consult--read' for more information."
                  (propertize (format " - %s" details) 'face 'font-lock-doc-face))))))))
 
 ;;;###autoload
-(defun consult-lsp-file-symbols ()
-  "Search symbols defined in current file in a manner similar to `consult-line'."
-  (interactive)
+(defun consult-lsp-file-symbols (group-results)
+  "Search symbols defined in current file in a manner similar to `consult-line'.
+
+If the prefix argument GROUP-RESULTS is specified, symbols are grouped by their
+kind; otherwise they are returned in the order that they appear in the file."
+  (interactive "P")
   (consult--read
    (consult--with-increased-gc (consult-lsp--file-symbols-candidates))
    :prompt "Go to symbol: "
@@ -529,6 +532,7 @@ See the :annotate documentation of `consult--read' for more information."
    :category 'consult-lsp-file-symbols
    :lookup #'consult--line-match
    :narrow (consult--type-narrow consult-lsp-symbols-narrow)
+   :group (when group-results (consult--type-group consult-lsp-symbols-narrow))
    :state (consult--jump-state)))
 
 
