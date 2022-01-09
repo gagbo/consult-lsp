@@ -4,7 +4,7 @@
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
 ;; Package-Requires: ((emacs "26.3") (consult-lsp "0.6") (marginalia "0.8"))
-;; Version: 0.6
+;; Version: 0.7
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;; Copyright (c) 2021 Gerry Agbobada and contributors
