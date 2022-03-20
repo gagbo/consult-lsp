@@ -163,8 +163,8 @@ CURRENT-WORKSPACE? has the same meaning as in `lsp-diagnostics'."
      (lsp-diagnostics current-workspace?)))
    ;; Sort by ascending severity
    (lambda (cand-left cand-right)
-     (let* ((diag-left (get-text-property 0 'consult--candidate cand-left))
-            (diag-right (get-text-property 0 'consult--candidate cand-right))
+     (let* ((diag-left (cdr (get-text-property 0 'consult--candidate cand-left)))
+            (diag-right (cdr (get-text-property 0 'consult--candidate cand-right)))
             (sev-left (or (lsp:diagnostic-severity? diag-left) 12))
             (sev-right (or (lsp:diagnostic-severity? diag-right) 12)))
        (< sev-left sev-right)))))
