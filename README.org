@@ -8,8 +8,8 @@
 * Introduction
 Helm and Ivy users have extra commands that leverage lsp-mode extra information, let's try to
 mimic a few features of [[https://github.com/emacs-lsp/helm-lsp][helm-lsp]] and
-[[https://github.com/emacs-lsp/lsp-ivy][lsp-ivy]] in consult workflow (tested only with
-selectrum for the time being)
+[[https://github.com/emacs-lsp/lsp-ivy][lsp-ivy]] in consult workflow (tested with
+selectrum and dogfed with vertico)
 
 * Screenshots
 
@@ -38,13 +38,6 @@ There is currently no plan to add an interface to list and/or act on
 code-actions, but contributions are welcome!
 
 * Configuration
-** Marginalia support
-The =consult-lsp-marginalia-mode= global minor mode is included in the package,
-and provides basic marginalia integration.
-
-The file is small, and I am not very proficient with Marginalia yet, but it
-might become a separate package later.
-
 ** Customize Look and Feel
 
 This package provides 2 entry points per command in order to customize the
