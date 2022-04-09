@@ -4,8 +4,8 @@
 ;; Keywords: tools, completion, lsp
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
-;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.9") (f "0.20.0"))
-;; Version: 0.8
+;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.16") (f "0.20.0"))
+;; Version: 1.0
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;; Copyright (c) 2021 Gerry Agbobada and contributors
@@ -67,6 +67,14 @@
 (require 'lsp)
 (require 'f)
 (require 'cl-lib)
+
+;; Poorman's breaking change detection
+;; The state protocol change happened in https://github.com/minad/consult/commit/3668df6afaa8c188d7c255fa6ae4e62d54cb20c9
+;; which also happened to remove this macro
+(when (fboundp 'consult--with-location-upgrade)
+  (user-error "This version of consult-lsp is unstable with older versions of consult. Please:
+ - upgrade consult past https://github.com/minad/consult/commit/3668df6afaa8c188d7c255fa6ae4e62d54cb20c9 or
+ - downgrade consult-lsp to 0.7 tag."))
 
 (defgroup consult-lsp nil
   "Consult commands for `lsp-mode'."
@@ -239,18 +247,14 @@ in candidates."
   "LSP diagnostic preview."
   (let ((open (consult--temporary-files))
         (jump (consult--jump-state)))
-    (lambda (cand restore)
-      (cond
-       (cand
-        (funcall jump
-                 (consult--position-marker
-                  (and (car cand) (funcall (if restore #'find-file open) (car cand)))
-                  (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr cand))))))
-                  (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr cand)))))))
-                 restore))
-       (restore
-        (funcall jump nil t)
-        (funcall open nil))))))
+    (lambda (action cand)
+      (when (eq action 'exit)
+        (funcall open))
+      (funcall jump action
+               (when cand (consult--position-marker
+                           (and (car cand) (funcall (if (eq action 'finish) #'find-file open) (car cand)))
+                           (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr cand))))))
+                           (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr cand))))))))))))
 
 ;;;###autoload
 (defun consult-lsp-diagnostics (arg)
@@ -284,28 +288,26 @@ in candidates."
   "Return a LSP symbol preview function."
   (let ((open (consult--temporary-files))
         (jump (consult--jump-state)))
-    (lambda (cand restore)
-      (when restore
-        (funcall open nil))
-      (when cand
-        (funcall jump
-                 (let* ((location (lsp:symbol-information-location cand))
-                        (uri (lsp:location-uri location)))
-                   (consult--position-marker
-                    (and uri (funcall (if restore #'find-file open) (lsp--uri-to-path uri)))
-                    (thread-first location
-                      (lsp:location-range)
-                      (lsp:range-start)
-                      (lsp:position-line)
-                      (1+)
-                      (lsp-translate-line))
-                    (thread-first location
-                      (lsp:location-range)
-                      (lsp:range-start)
-                      (lsp:position-character)
-                      (1+)
-                      (lsp-translate-column))))
-                 restore)))))
+    (lambda (action cand)
+      (when (eq action 'exit)
+        (funcall open))
+      (funcall jump action
+               (when cand (let* ((location (lsp:symbol-information-location cand))
+                                 (uri (lsp:location-uri location)))
+                            (consult--position-marker
+                             (and uri (funcall (if (eq action 'finish) #'find-file open) (lsp--uri-to-path uri)))
+                             (thread-first location
+                                           (lsp:location-range)
+                                           (lsp:range-start)
+                                           (lsp:position-line)
+                                           (1+)
+                                           (lsp-translate-line))
+                             (thread-first location
+                                           (lsp:location-range)
+                                           (lsp:range-start)
+                                           (lsp:position-character)
+                                           (1+)
+                                           (lsp-translate-column)))))))))
 
 ;; It is an async source because some servers, like rust-analyzer, send a
 ;; max count of results for queries (120 last time checked). Therefore, in
