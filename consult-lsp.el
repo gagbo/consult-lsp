@@ -401,8 +401,8 @@ usable in the annotation-function."
          (all-workspaces? arg)
          (ws (or (and all-workspaces? (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session))))))
                  (lsp-workspaces)
-                 (gethash (lsp-workspace-root default-directory)
-                          (lsp-session-folder->servers (lsp-session))))))
+                 (lsp-get (lsp-session-folder->servers (lsp-session))
+                          (lsp-workspace-root default-directory)))))
     (unless ws
       (user-error "There is no active workspace !"))
     (consult--read
