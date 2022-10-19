@@ -5,7 +5,7 @@
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
 ;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.16") (f "0.20.0"))
-;; Version: 1.0-dev
+;; Version: 1.1
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;; Copyright (c) 2021 Gerry Agbobada and contributors
@@ -428,39 +428,42 @@ usable in the annotation-function."
 ;;;; File symbols
 
 (defun consult-lsp--flatten-document-symbols (to-flatten)
-  "Helper function for flattening document symbols to a plain list."
+  "Helper function for flattening document symbols TO-FLATTEN to a plain list."
   (cl-labels ((rec-helper
                (to-flatten accumulator)
                (dolist (table to-flatten)
-                 (when (hash-table-p table)
-                   (push table accumulator)
-                   (when-let ((children (gethash "children" table)))
-                     (setq accumulator (rec-helper
-                                        (append children nil) ; convert children from vector to list
-                                        accumulator))
-                     (remhash "children" table))))
+                 (push table accumulator)
+                 (when-let ((children (lsp-get table "children")))
+                   (setq accumulator (rec-helper
+                                      (append children nil) ; convert children from vector to list
+                                      accumulator))))
                accumulator))
     (nreverse (rec-helper to-flatten nil))))
 
 (defun consult-lsp--file-symbols--transformer (symbol)
   "Default transformer to produce a completion candidate from SYMBOL."
-  (let ((line (thread-first symbol
-                (lsp:document-symbol-selection-range)
-                (lsp:range-start)
-                (lsp:position-line)
-                (lsp-translate-line)))
+  (let ((lbeg (thread-first symbol
+                            (lsp:document-symbol-selection-range)
+                            (lsp:range-start)
+                            (lsp:position-line)
+                            (lsp-translate-line)))
+        (lend (thread-first symbol
+                            (lsp:document-symbol-selection-range)
+                            (lsp:range-end)
+                            (lsp:position-line)
+                            (lsp-translate-line)))
         (cbeg (thread-first symbol
-                (lsp:document-symbol-selection-range)
-                (lsp:range-start)
-                (lsp:position-character)
-                (lsp-translate-column)))
+                            (lsp:document-symbol-selection-range)
+                            (lsp:range-start)
+                            (lsp:position-character)
+                            (lsp-translate-column)))
         (cend (thread-first symbol
-                (lsp:document-symbol-selection-range)
-                (lsp:range-end)
-                (lsp:position-character)
-                (lsp-translate-column))))
-    (let ((beg (lsp--line-character-to-point line cbeg))
-          (end (lsp--line-character-to-point line cend))
+                            (lsp:document-symbol-selection-range)
+                            (lsp:range-end)
+                            (lsp:position-character)
+                            (lsp-translate-column))))
+    (let ((beg (lsp--line-character-to-point lbeg cbeg))
+          (end (lsp--line-character-to-point lend cend))
           (marker (make-marker)))
       (set-marker marker beg)
       ;; Pre-condition to respect narrowing
@@ -483,7 +486,7 @@ usable in the annotation-function."
                      (format " (%s)"
                              symb-info-name))))
          marker
-         (1+ line)
+         (1+ lbeg)
          'consult--type (consult-lsp--symbols--kind-to-narrow symbol)
          'consult--name (lsp:symbol-information-name symbol)
          'consult--details (lsp:document-symbol-detail? symbol))))))
