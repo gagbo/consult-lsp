@@ -433,7 +433,7 @@ usable in the annotation-function."
                (to-flatten accumulator)
                (dolist (table to-flatten)
                  (push table accumulator)
-                 (when-let ((children (lsp-get table "children")))
+                 (when-let ((children (lsp-get table :children)))
                    (setq accumulator (rec-helper
                                       (append children nil) ; convert children from vector to list
                                       accumulator))))
