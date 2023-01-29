@@ -417,6 +417,7 @@ usable in the annotation-function."
      :annotate (funcall consult-lsp-symbols-annotate-builder-function)
      :require-match t
      :history t
+     :add-history (consult--async-split-thingatpt 'symbol)
      :initial (consult--async-split-initial initial)
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
