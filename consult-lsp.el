@@ -520,6 +520,7 @@ usable in the annotation-function."
                              symb-info-name))))
          marker
          (1+ lbeg)
+         marker
          'consult--type (consult-lsp--symbols--kind-to-narrow symbol)
          'consult--name (lsp:symbol-information-name symbol)
          'consult--details (lsp:document-symbol-detail? symbol))))))
