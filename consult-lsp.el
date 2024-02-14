@@ -155,6 +155,11 @@ It MUST have a \"Other\" category for everything that is not listed."
   :group 'consult-lsp
   :type '(alist :key-type character :value-type string))
 
+(defcustom consult-lsp-min-query-length 0
+  "Don't query LSP server with fewer than this many characters of input."
+  :type 'integer
+  :group 'consult-lsp)
+
 
 
 ;;;; Inner functions
@@ -352,18 +357,19 @@ When ARG is set through prefix, query all workspaces."
       (pcase-exhaustive action
         ((or 'setup (pred stringp))
          (let ((query (if (stringp action) action "")))
-           (with-lsp-workspaces workspaces
-             (consult--async-log "consult-lsp-symbols request started for %S\n" action)
-             (lsp-request-async
-              "workspace/symbol"
-              (list :query query)
-              (lambda (res)
-                ;; Flush old candidates list
-                (funcall async 'flush)
-                (funcall async res))
-              :mode 'detached
-              :no-merge nil
-              :cancel-token cancel-token)))
+           (when (>= (length query) consult-lsp-min-query-length)
+             (with-lsp-workspaces workspaces
+               (consult--async-log "consult-lsp-symbols request started for %S\n" action)
+               (lsp-request-async
+                "workspace/symbol"
+                (list :query query)
+                (lambda (res)
+                  ;; Flush old candidates list
+                  (funcall async 'flush)
+                  (funcall async res))
+                :mode 'detached
+                :no-merge nil
+                :cancel-token cancel-token))))
          (funcall async action))
         ('destroy
          (lsp-cancel-request-by-token cancel-token)
@@ -409,12 +415,12 @@ usable in the annotation-function."
     (lambda (cand)
       (let* ((symbol-info (get-text-property 0 'consult--candidate cand))
              (line (thread-first symbol-info
-                     (lsp:symbol-information-location)
-                     (lsp:location-range)
-                     (lsp:range-start)
-                     (lsp:position-line)
-                     (1+)
-                     (lsp-translate-line))))
+                                 (lsp:symbol-information-location)
+                                 (lsp:location-range)
+                                 (lsp:range-start)
+                                 (lsp:position-line)
+                                 (1+)
+                                 (lsp-translate-line))))
         (list
          cand
          (format "%-10s "
@@ -439,7 +445,7 @@ usable in the annotation-function."
       (user-error "There is no active workspace !"))
     (consult--read
      (thread-first
-         (consult--async-sink)
+       (consult--async-sink)
        (consult--async-refresh-immediate)
        (consult--async-map consult-lsp-symbols-transformer-function)
        (consult-lsp--symbols--make-async-source ws)
@@ -463,14 +469,14 @@ usable in the annotation-function."
 (defun consult-lsp--flatten-document-symbols (to-flatten)
   "Helper function for flattening document symbols TO-FLATTEN to a plain list."
   (cl-labels ((rec-helper
-               (to-flatten accumulator)
-               (dolist (table to-flatten)
-                 (push table accumulator)
-                 (when-let ((children (lsp-get table :children)))
-                   (setq accumulator (rec-helper
-                                      (append children nil) ; convert children from vector to list
-                                      accumulator))))
-               accumulator))
+                (to-flatten accumulator)
+                (dolist (table to-flatten)
+                  (push table accumulator)
+                  (when-let ((children (lsp-get table :children)))
+                    (setq accumulator (rec-helper
+                                       (append children nil) ; convert children from vector to list
+                                       accumulator))))
+                accumulator))
     (nreverse (rec-helper to-flatten nil))))
 
 (defun consult-lsp--file-symbols--transformer (symbol)
