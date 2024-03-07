@@ -395,7 +395,8 @@ When ARG is set through prefix, query all workspaces."
                           (lsp-translate-line))))
    'consult--type (consult-lsp--symbols--kind-to-narrow symbol-info)
    'consult--candidate symbol-info
-   'consult--details (lsp:document-symbol-detail? symbol-info)))
+   'consult--details (lsp:document-symbol-detail? symbol-info)
+   'consult--container-name (lsp-get symbol-info :containerName)))
 
 (defun consult-lsp--symbols-annotate-builder ()
   "Annotation function for `consult-lsp-symbols'.
@@ -423,6 +424,8 @@ usable in the annotation-function."
           (or
            (when-let ((details (get-text-property 0 'consult--details cand)))
              (propertize (format " — %s" details) 'face 'font-lock-doc-face))
+           (when-let ((cont (get-text-property 0 'consult--container-name cand)))
+             (propertize (format " %s" cont) 'face 'completions-annotations))
            "")))))))
 
 ;;;###autoload
@@ -463,15 +466,25 @@ usable in the annotation-function."
 (defun consult-lsp--flatten-document-symbols (to-flatten)
   "Helper function for flattening document symbols TO-FLATTEN to a plain list."
   (cl-labels ((rec-helper
-               (to-flatten accumulator)
+                (to-flatten accumulator parents)
                (dolist (table to-flatten)
+                 ;; Table may be of type SymbolInformation or DocumentSymbol. See
+                 ;; https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
+                 ;; SymbolInformation already has containerName, but one have to
+                 ;; recreate it when DocumentSymbol has returned.
+                 (when (and parents
+                            (null (lsp-get table :containerName)))
+                   (lsp-put table :containerName (string-join parents ".")))
                  (push table accumulator)
                  (when-let ((children (lsp-get table :children)))
+                   (setq parents (append parents (list (lsp-get table :name))))
                    (setq accumulator (rec-helper
                                       (append children nil) ; convert children from vector to list
-                                      accumulator))))
+                                      accumulator
+                                      parents))
+                   (setq parents (nbutlast parents))))
                accumulator))
-    (nreverse (rec-helper to-flatten nil))))
+    (nreverse (rec-helper to-flatten nil nil))))
 
 (defun consult-lsp--file-symbols--transformer (symbol)
   "Default transformer to produce a completion candidate from SYMBOL."
@@ -523,7 +536,8 @@ usable in the annotation-function."
          marker
          'consult--type (consult-lsp--symbols--kind-to-narrow symbol)
          'consult--name (lsp:symbol-information-name symbol)
-         'consult--details (lsp:document-symbol-detail? symbol))))))
+         'consult--details (lsp:document-symbol-detail? symbol)
+         'consult--container-name (lsp-get symbol :containerName))))))
 
 (defun consult-lsp--file-symbols-candidates ()
   "Returns all candidates for a `consult-lsp-file-symbols' search.
@@ -551,7 +565,9 @@ See the :annotate documentation of `consult--read' for more information."
               (format fmt line)
               (concat
                (when-let ((details (get-text-property 0 'consult--details cand)))
-                 (propertize (format " - %s" details) 'face 'font-lock-doc-face))))))))
+                 (propertize (format " - %s" details) 'face 'font-lock-doc-face))
+               (when-let ((container (get-text-property 0 'consult--container-name cand)))
+                 (propertize (format " %s" container) 'face 'completions-annotations))))))))
 
 ;;;###autoload
 (defun consult-lsp-file-symbols (group-results)
