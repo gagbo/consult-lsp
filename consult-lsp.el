@@ -368,7 +368,7 @@ When ARG is set through prefix, query all workspaces."
                   (funcall async 'flush)
                   (funcall async res))
                 :mode 'detached
-                :no-merge nil
+                :no-merge t
                 :cancel-token cancel-token))))
          (funcall async action))
         ('destroy
@@ -376,8 +376,8 @@ When ARG is set through prefix, query all workspaces."
          (funcall async action))
         (_ (funcall async action))))))
 
-(defun consult-lsp--symbols--transformer (symbol-info)
-  "Default transformer to produce a completion candidate from SYMBOL-INFO."
+(defun consult-lsp--symbols--transformer (workspace symbol-info)
+  "Default transformer to produce a completion candidate from the WORKSPACE's SYMBOL-INFO."
   (propertize
    ;; We have to add the location in the candidate string for 2 purposes,
    ;; in case symbols have the same name:
@@ -389,7 +389,7 @@ When ARG is set through prefix, query all workspaces."
            (consult-lsp--format-file-line-match
             (let ((file
                    (lsp--uri-to-path (lsp:location-uri (lsp:symbol-information-location symbol-info)))))
-              (if-let ((wks (lsp-workspace-root file)))
+              (if-let ((wks (lsp--workspace-root workspace)))
                   (f-relative file wks)
                 file))
             (thread-first symbol-info
@@ -402,6 +402,16 @@ When ARG is set through prefix, query all workspaces."
    'consult--type (consult-lsp--symbols--kind-to-narrow symbol-info)
    'consult--candidate symbol-info
    'consult--details (lsp:document-symbol-detail? symbol-info)))
+
+(defun consult-lsp--symbols--make-transformer (workspace-symbols-info)
+  "Invokes the default transformer for each SYMBOL-INFO in the response.
+
+WORKSPACE-SYMBOLS-INFO is of the form (lsp--workspace . (list symbol-info))"
+  (let ((workspace (car workspace-symbols-info))
+        (symbols-info (cdr workspace-symbols-info)))
+    (mapcar (lambda (symbol-info)
+              (funcall consult-lsp-symbols-transformer-function workspace symbol-info))
+            symbols-info)))
 
 (defun consult-lsp--symbols-annotate-builder ()
   "Annotation function for `consult-lsp-symbols'.
@@ -447,7 +457,7 @@ usable in the annotation-function."
      (thread-first
        (consult--async-sink)
        (consult--async-refresh-immediate)
-       (consult--async-map consult-lsp-symbols-transformer-function)
+       (consult--async-transform mapcan #'consult-lsp--symbols--make-transformer)
        (consult-lsp--symbols--make-async-source ws)
        (consult--async-throttle)
        (consult--async-split))
