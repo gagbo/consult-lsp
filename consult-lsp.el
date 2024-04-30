@@ -459,7 +459,7 @@ usable in the annotation-function."
     (consult--read
      (thread-first
        (consult--async-sink)
-       (consult--async-refresh-immediate)
+       (consult--async-refresh-timer)
        (consult--async-transform mapcan #'consult-lsp--symbols--make-transformer)
        (consult-lsp--symbols--make-async-source ws)
        (consult--async-throttle)
