@@ -356,6 +356,7 @@ When ARG is set through prefix, query all workspaces."
     (lambda (action)
       (pcase-exhaustive action
         ((or 'setup (pred stringp))
+         (funcall async action)
          (let ((query (if (stringp action) action "")))
            (when (>= (length query) consult-lsp-min-query-length)
              (with-lsp-workspaces workspaces
@@ -369,11 +370,10 @@ When ARG is set through prefix, query all workspaces."
                   (funcall async res))
                 :mode 'detached
                 :no-merge t
-                :cancel-token cancel-token))))
-         (funcall async action))
+                :cancel-token cancel-token)))))
         ('destroy
-         (lsp-cancel-request-by-token cancel-token)
-         (funcall async action))
+         (funcall async action)
+         (lsp-cancel-request-by-token cancel-token))
         (_ (funcall async action))))))
 
 (defun consult-lsp--symbols--transformer (workspace symbol-info)
