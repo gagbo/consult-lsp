@@ -155,7 +155,7 @@ It MUST have a \"Other\" category for everything that is not listed."
   :group 'consult-lsp
   :type '(alist :key-type character :value-type string))
 
-(defcustom consult-lsp-min-query-length 0
+(defcustom consult-lsp-min-query-length consult-async-min-input
   "Don't query LSP server with fewer than this many characters of input."
   :type 'integer
   :group 'consult-lsp)
@@ -456,7 +456,8 @@ usable in the annotation-function."
          (ws (or (and all-workspaces? (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session))))))
                  (lsp-workspaces)
                  (lsp-get (lsp-session-folder->servers (lsp-session))
-                          (lsp-workspace-root default-directory)))))
+                          (lsp-workspace-root default-directory))))
+         (consult-async-min-input consult-lsp-min-query-length))
     (unless ws
       (user-error "There is no active workspace !"))
     (consult--read
