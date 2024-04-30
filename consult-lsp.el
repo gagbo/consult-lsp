@@ -352,7 +352,8 @@ When ARG is set through prefix, query all workspaces."
 ;; To avoid this issue, we use an async source that retriggers the request.
 (defun consult-lsp--symbols--make-async-source (async workspaces)
   "Pipe a `consult--read' compatible async-source ASYNC to search for symbols in WORKSPACES."
-  (let ((cancel-token :consult-lsp--symbols))
+  (let ((async (consult--async-indicator async))
+        (cancel-token :consult-lsp--symbols))
     (lambda (action)
       (pcase-exhaustive action
         ((or 'setup (pred stringp))
@@ -361,13 +362,15 @@ When ARG is set through prefix, query all workspaces."
            (when (>= (length query) consult-lsp-min-query-length)
              (with-lsp-workspaces workspaces
                (consult--async-log "consult-lsp-symbols request started for %S\n" action)
+               (funcall async 'indicator 'running)
                (lsp-request-async
                 "workspace/symbol"
                 (list :query query)
                 (lambda (res)
                   ;; Flush old candidates list
                   (funcall async 'flush)
-                  (funcall async res))
+                  (funcall async res)
+                  (funcall async 'indicator 'finished))
                 :mode 'detached
                 :no-merge t
                 :cancel-token cancel-token)))))
