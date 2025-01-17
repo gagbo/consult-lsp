@@ -5,7 +5,7 @@
 ;; Author: Gerry Agbobada
 ;; Maintainer: Gerry Agbobada
 ;; Package-Requires: ((emacs "27.1") (lsp-mode "5.0") (consult "0.16") (f "0.20.0"))
-;; Version: 1.1-dev
+;; Version: 2.0
 ;; Homepage: https://github.com/gagbo/consult-lsp
 
 ;; Copyright (c) 2021 Gerry Agbobada and contributors
@@ -142,13 +142,13 @@ to a candidate for `consult-lsp-symbols'."
     (?S . "String")
 
     (?o . "Other"))
-    ;; Example types included in "Other" (i.e. the ignored)
-    ;; (?n . "Null")
-    ;; (?c . "Constructor")
-    ;; (?e . "Event")
-    ;; (?k . "Key")
-    ;; (?o . "Operator")
-    
+  ;; Example types included in "Other" (i.e. the ignored)
+  ;; (?n . "Null")
+  ;; (?c . "Constructor")
+  ;; (?e . "Event")
+  ;; (?k . "Key")
+  ;; (?o . "Operator")
+
   "Set of narrow keys for `consult-lsp-symbols' and `consult-lsp-file-symbols'.
 
 It MUST have a \"Other\" category for everything that is not listed."
@@ -350,37 +350,37 @@ When ARG is set through prefix, query all workspaces."
 ;; max count of results for queries (120 last time checked). Therefore, in
 ;; big projects the first query might not have the target result to filter on.
 ;; To avoid this issue, we use an async source that retriggers the request.
-(defun consult-lsp--symbols--make-async-source (async workspaces)
-  "Pipe a `consult--read' compatible async-source ASYNC to search for symbols in WORKSPACES."
-  (let* ((async (consult--async-indicator async))
-         (cancel-token :consult-lsp--symbols)
-         (query-lsp (lambda (query)
-                      (with-lsp-workspaces workspaces
-                        (consult--async-log "consult-lsp-symbols request started for %S\n" query)
-                        (funcall async 'indicator 'running)
-                        (lsp-request-async "workspace/symbol"
-                                           (list :query query)
-                                           (lambda (res)
-                                             ;; Flush old candidates list
-                                             (funcall async 'flush)
-                                             (funcall async res)
-                                             (funcall async 'indicator 'finished))
-                                           :mode 'detached
-                                           :no-merge t
-                                           :cancel-token cancel-token)))))
-    (lambda (action)
-      (pcase-exhaustive action
-        ('setup
-         (funcall async action)
-         (funcall query-lsp ""))
-        ((pred stringp)
-         (funcall async action)
-         (unless (string= "" action)
-           (funcall query-lsp action)))
-        ('destroy
-         (funcall async action)
-         (lsp-cancel-request-by-token cancel-token))
-        (_ (funcall async action))))))
+(defun consult-lsp--symbols--make-async-source (workspaces)
+  "Pipe a `consult--read' compatible sink to search for symbols in WORKSPACES."
+  (lambda (sink)
+    (let* ((cancel-token :consult-lsp--symbols)
+           (query-lsp (lambda (query)
+                        (with-lsp-workspaces workspaces
+                          (consult--async-log "consult-lsp-symbols request started for %S\n" query)
+                          (lsp-request-async "workspace/symbol"
+                                             (list :query query)
+                                             (lambda (res)
+                                               ;; Flush old candidates list
+                                               (funcall sink 'flush)
+                                               (funcall sink res)
+                                               (funcall sink [indicator finished]))
+                                             :mode 'detached
+                                             :no-merge t
+                                             :cancel-token cancel-token)))))
+      (lambda (action)
+        (pcase-exhaustive action
+          ('setup
+           (funcall query-lsp "")
+           (funcall sink action))
+          ((pred stringp)
+           (unless (string= "" action)
+             (funcall sink [indicator running])
+             (funcall query-lsp action))
+           (funcall sink action))
+          ('destroy
+           (lsp-cancel-request-by-token cancel-token)
+           (funcall sink action))
+          (_ (funcall sink action)))))))
 
 (defun consult-lsp--symbols--transformer (workspace symbol-info)
   "Default transformer to produce a completion candidate from the WORKSPACE's SYMBOL-INFO."
@@ -454,8 +454,7 @@ usable in the annotation-function."
 (defun consult-lsp-symbols (arg)
   "Query workspace symbols. When ARG is set through prefix, query all workspaces."
   (interactive "P")
-  (let* ((initial "")
-         (all-workspaces? arg)
+  (let* ((all-workspaces? arg)
          (ws (or (and all-workspaces? (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session))))))
                  (lsp-workspaces)
                  (lsp-get (lsp-session-folder->servers (lsp-session))
@@ -464,19 +463,20 @@ usable in the annotation-function."
     (unless ws
       (user-error "There is no active workspace !"))
     (consult--read
-     (thread-first
-       (consult--async-sink)
-       (consult--async-refresh-timer)
-       (consult--async-transform mapcan #'consult-lsp--symbols--make-transformer)
-       (consult-lsp--symbols--make-async-source ws)
-       (consult--async-throttle)
-       (consult--async-split))
+     ;; The default `:async-wrap` for `consult-read` is `consult--async-wrap`, which
+     ;; puts consult split before, and indicator->refresh after
+     (consult--async-pipeline
+      (consult--async-min-input)
+      (consult--async-throttle)
+      (consult-lsp--symbols--make-async-source ws)
+      (consult--async-transform (apply-partially #'mapcan #'consult-lsp--symbols--make-transformer))
+      (consult--async-highlight))
      :prompt "LSP Symbols "
      :annotate (funcall consult-lsp-symbols-annotate-builder-function)
      :require-match t
      :history t
-     :add-history (consult--async-split-thingatpt 'symbol)
-     :initial (consult--async-split-initial initial)
+     :add-history (thing-at-point 'symbol)
+     :initial nil
      :category 'consult-lsp-symbols
      :lookup #'consult--lookup-candidate
      :group (consult--type-group consult-lsp-symbols-narrow)
@@ -490,23 +490,23 @@ usable in the annotation-function."
   "Helper function for flattening document symbols TO-FLATTEN to a plain list."
   (cl-labels ((rec-helper
                 (to-flatten accumulator parents)
-               (dolist (table to-flatten)
-                 ;; Table may be of type SymbolInformation or DocumentSymbol. See
-                 ;; https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
-                 ;; SymbolInformation already has containerName, but one have to
-                 ;; recreate it when DocumentSymbol has returned.
-                 (when (and parents
-                            (null (lsp-get table :containerName)))
-                   (lsp-put table :containerName (string-join parents ".")))
-                 (push table accumulator)
-                 (when-let ((children (lsp-get table :children)))
-                   (setq parents (append parents (list (lsp-get table :name))))
-                   (setq accumulator (rec-helper
-                                      (append children nil) ; convert children from vector to list
-                                      accumulator
-                                      parents))
-                   (setq parents (nbutlast parents))))
-               accumulator))
+                (dolist (table to-flatten)
+                  ;; Table may be of type SymbolInformation or DocumentSymbol. See
+                  ;; https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
+                  ;; SymbolInformation already has containerName, but one have to
+                  ;; recreate it when DocumentSymbol has returned.
+                  (when (and parents
+                             (null (lsp-get table :containerName)))
+                    (lsp-put table :containerName (string-join parents ".")))
+                  (push table accumulator)
+                  (when-let ((children (lsp-get table :children)))
+                    (setq parents (append parents (list (lsp-get table :name))))
+                    (setq accumulator (rec-helper
+                                       (append children nil) ; convert children from vector to list
+                                       accumulator
+                                       parents))
+                    (setq parents (nbutlast parents))))
+                accumulator))
     (nreverse (rec-helper to-flatten nil nil))))
 
 (defun consult-lsp--file-symbols--transformer (symbol)
