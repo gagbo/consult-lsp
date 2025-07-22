@@ -29,6 +29,8 @@ happening.
 * Commands
 - consult-lsp-diagnostics :: Select diagnostics from current workspace. Pass
   prefix argument to search all workspaces
+- consult-lsp-file-diagnostics :: Select diagnostics from current file only.
+  Provides a focused view for working on issues in the current buffer.
 - consult-lsp-symbols :: Select symbols from current workspace. Pass prefix
   argument to search all workspaces.
 - consult-lsp-file-symbols :: Interactively select a symbol from the
