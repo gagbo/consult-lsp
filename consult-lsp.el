@@ -116,7 +116,7 @@ to a candidate for `consult-lsp-symbols'."
   :group 'consult-lsp)
 
 (defcustom consult-lsp-file-diagnostics-transformer-function #'consult-lsp--file-diagnostics--transformer
-  "Function that transform LSP-mode diagnostic from a (file diag) pair
+  "Function that transform LSP-mode diagnostic from a diag
 to a candidate for `consult-lsp-file-diagnostics'."
   :type 'function
   :group 'consult-lsp)
@@ -327,24 +327,24 @@ When ARG is set through prefix, query all workspaces."
 (defun consult-lsp--file-diagnostics--flatten-diagnostics (transformer)
   "Flatten the list of LSP-mode diagnostics for current file to consult candidates.
 
-TRANSFORMER takes (file diag) and returns a suitable element for
+TRANSFORMER takes diag and returns a suitable element for
 `consult--read'."
   (when-let ((current-file (buffer-file-name)))
     (let ((file-diagnostics (gethash current-file (lsp-diagnostics))))
       (when file-diagnostics
         (sort
-         (mapcar (lambda (diag) (funcall transformer current-file diag))
+         (mapcar (lambda (diag) (funcall transformer diag))
                  file-diagnostics)
          ;; Sort by ascending severity
          (lambda (cand-left cand-right)
-           (let* ((diag-left (cdr (get-text-property 0 'consult--candidate cand-left)))
-                  (diag-right (cdr (get-text-property 0 'consult--candidate cand-right)))
+           (let* ((diag-left (get-text-property 0 'consult--candidate cand-left))
+                  (diag-right (get-text-property 0 'consult--candidate cand-right))
                   (sev-left (or (lsp:diagnostic-severity? diag-left) 12))
                   (sev-right (or (lsp:diagnostic-severity? diag-right) 12)))
              (< sev-left sev-right))))))))
 
-(defun consult-lsp--file-diagnostics--transformer (file diag)
-  "Transform LSP-mode diagnostics from a pair FILE DIAG to a candidate for file diagnostics."
+(defun consult-lsp--file-diagnostics--transformer (diag)
+  "Transform LSP-mode diagnostics from DIAG to a candidate for file diagnostics."
   (let ((line (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range diag))))))
         (col (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range diag)))))))
     (propertize
@@ -352,13 +352,13 @@ TRANSFORMER takes (file diag) and returns a suitable element for
              line
              col
              (lsp:diagnostic-message diag))
-     'consult--candidate (cons file diag)
+     'consult--candidate diag
      'consult--type (consult-lsp--diagnostics--severity-to-type diag))))
 
 (defun consult-lsp--file-diagnostics-annotate-builder ()
   "Annotation function for `consult-lsp-file-diagnostics'."
   (lambda (cand)
-    (let* ((diag (cdr (get-text-property 0 'consult--candidate cand))))
+    (let* ((diag (get-text-property 0 'consult--candidate cand)))
       (list cand
             (format "%-5s " (consult-lsp--diagnostics--severity-to-level diag))
             (when-let ((source (consult-lsp--diagnostics--source diag)))
@@ -371,8 +371,8 @@ TRANSFORMER takes (file diag) and returns a suitable element for
       (funcall jump action
                (when cand (consult-lsp--marker-from-line-column
                            (current-buffer)
-                           (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range (cdr cand))))))
-                           (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range (cdr cand))))))))))))
+                           (lsp-translate-line (1+ (lsp:position-line (lsp:range-start (lsp:diagnostic-range cand)))))
+                           (lsp-translate-column (1+ (lsp:position-character (lsp:range-start (lsp:diagnostic-range cand)))))))))))
 
 ;;;###autoload
 (defun consult-lsp-file-diagnostics ()
@@ -384,7 +384,11 @@ TRANSFORMER takes (file diag) and returns a suitable element for
     (unless candidates
       (user-error "No diagnostics found in current file"))
     (consult--read candidates
-                   :prompt "File Diagnostics: "
+                   :prompt (concat "File Diagnostics ("
+                                   (if-let ((wks (lsp-workspace-root (buffer-file-name))))
+                                       (f-relative (buffer-file-name) wks)
+                                     (file-name-nondirectory (buffer-file-name)))
+                                   "): ")
                    :annotate (funcall consult-lsp-file-diagnostics-annotate-builder-function)
                    :require-match t
                    :history t
