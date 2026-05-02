@@ -546,8 +546,8 @@ usable in the annotation-function."
   (let* ((all-workspaces? arg)
          (ws (or (and all-workspaces? (-uniq (-flatten (ht-values (lsp-session-folder->servers (lsp-session))))))
                  (lsp-workspaces)
-                 (lsp-get (lsp-session-folder->servers (lsp-session))
-                          (lsp-workspace-root default-directory))))
+                 (when-let* ((root (lsp-workspace-root default-directory)))
+                   (gethash root (lsp-session-folder->servers (lsp-session))))))
          (consult-async-min-input consult-lsp-min-query-length))
     (unless ws
       (user-error "There is no active workspace !"))
