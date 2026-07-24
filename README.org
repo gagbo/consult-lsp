@@ -36,7 +36,7 @@ happening.
 - consult-lsp-file-symbols :: Interactively select a symbol from the
   current file, in a manner similar to consult-line.
 - consult-lsp-code-actions :: Select and execute LSP code actions at point,
-  similar to `helm-lsp-code-actions'.
+  similar to ~helm-lsp-code-actions~.
 
 * Configuration
 ** Customize Look and Feel
