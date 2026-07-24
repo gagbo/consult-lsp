@@ -35,9 +35,8 @@ happening.
   argument to search all workspaces.
 - consult-lsp-file-symbols :: Interactively select a symbol from the
   current file, in a manner similar to consult-line.
-
-There is currently no plan to add an interface to list and/or act on
-code-actions, but contributions are welcome!
+- consult-lsp-code-actions :: Select and execute LSP code actions at point,
+  similar to ~helm-lsp-code-actions~.
 
 * Configuration
 ** Customize Look and Feel

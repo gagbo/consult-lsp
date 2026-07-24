@@ -53,6 +53,10 @@
 ;; M-x consult-lsp-file-symbols provides a selection/narrowing command to search
 ;; and go to any arbitrary symbol in the selected buffer (like imenu)
 ;;
+;;;; Code actions
+;; M-x consult-lsp-code-actions provides a selection interface to available LSP
+;; code actions at point, similar to `helm-lsp-code-actions'.
+;;
 ;;;; Contributions
 ;; Possible contributions for ameliorations include:
 ;; - using a custom format for the propertized candidates
@@ -123,6 +127,17 @@ to a candidate for `consult-lsp-file-diagnostics'."
 
 (defcustom consult-lsp-file-diagnostics-annotate-builder-function #'consult-lsp--file-diagnostics-annotate-builder
   "Annotation function builder for `consult-lsp-file-diagnostics'."
+  :type 'function
+  :group 'consult-lsp)
+
+(defcustom consult-lsp-code-actions-transformer-function #'consult-lsp--code-actions--transformer
+  "Function that transform LSP code actions to a candidate for
+`consult-lsp-code-actions'."
+  :type 'function
+  :group 'consult-lsp)
+
+(defcustom consult-lsp-code-actions-annotate-builder-function #'consult-lsp--code-actions-annotate-builder
+  "Annotation function builder for `consult-lsp-code-actions'."
   :type 'function
   :group 'consult-lsp)
 
@@ -700,6 +715,53 @@ kind; otherwise they are returned in the order that they appear in the file."
    :narrow (consult--type-narrow consult-lsp-symbols-narrow)
    :group (when group-results (consult--type-group consult-lsp-symbols-narrow))
    :state (consult--jump-state)))
+
+
+;;;; Code actions
+
+(defun consult-lsp--code-actions--transformer (action title)
+  "Transform LSP code action ACTION with display TITLE to a candidate."
+  (propertize title
+              'consult--candidate action))
+
+(defun consult-lsp--code-actions--make-candidates (actions)
+  "Transform ACTIONS into consult candidates."
+  (let ((unique-fn (lsp--create-unique-string-fn)))
+    (mapcar (lambda (action)
+              (funcall consult-lsp-code-actions-transformer-function
+                       action
+                       (funcall unique-fn (lsp:code-action-title action))))
+            (seq-into actions 'list))))
+
+(defun consult-lsp--code-actions-annotate-builder ()
+  "Annotation function for `consult-lsp-code-actions'."
+  (lambda (cand)
+    (let* ((action (get-text-property 0 'consult--candidate cand))
+           (kind (lsp-get action :kind)))
+      (when kind
+        (consult--annotate-align cand (propertize kind 'face 'font-lock-comment-face))))))
+
+;;;###autoload
+(defun consult-lsp-code-actions ()
+  "Show LSP code actions using consult.
+
+When only one action is available and `lsp-auto-execute-action' is non-nil,
+execute it directly."
+  (interactive)
+  (let ((actions (lsp-code-actions-at-point)))
+    (cond
+     ((seq-empty-p actions) (signal 'lsp-no-code-actions nil))
+     ((and (eq (seq-length actions) 1) lsp-auto-execute-action)
+      (lsp-execute-code-action (lsp-seq-first actions)))
+     (t (let ((action (consult--read
+                       (consult-lsp--code-actions--make-candidates actions)
+                       :prompt "LSP Code Actions: "
+                       :annotate (funcall consult-lsp-code-actions-annotate-builder-function)
+                       :require-match t
+                       :category 'consult-lsp-code-actions
+                       :lookup #'consult--lookup-candidate)))
+          (when action
+            (lsp-execute-code-action action)))))))
 
 
 
